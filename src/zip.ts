@@ -1,11 +1,9 @@
 
 /**
- * zip multiple sources together creating a tuple 
- * 
- * a - b - c - d - e - f
+ * given multiple sources, combine their chunks into a tuple
  * @param sources 
  */
-export function zip<T>(sources: ReadableStream<T>[] ): ReadableStream<T[]>{
+export function zip<T>(sources: ReadableStream<T>[]): ReadableStream<T[]>{
   let readers: ReadableStreamDefaultReader<T>[] = null;
 
   return new ReadableStream<T[]>({

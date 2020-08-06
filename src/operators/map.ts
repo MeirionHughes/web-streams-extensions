@@ -1,11 +1,14 @@
 
 /**
- * given a stream of T and selector f(T)->R returns a stream of R where R != undefined
+ * given a stream of T and selector f(T)->R, return a stream of R, where f(T) != undefined
  * @param stream the stream of T elements to map
  * @param select a method to select R given a T, undefined values are not enqueued 
  * @param highWaterMark max cache size of stream<R>
  */
-export function map<T, R>(stream: ReadableStream<T>, select:(chunk:T)=>R, highWaterMark = 32): ReadableStream<R>{ 
+export interface MapSelector<T, R>{
+  (chunk:T):R;
+}
+export function map<T, R=T>(select:MapSelector<T, R>, highWaterMark = 32): (src:ReadableStream<T>)=>ReadableStream<R>{ 
   let reader: ReadableStreamDefaultReader<T> = null;
 
   async function flush(controller: ReadableStreamDefaultController<R>) {
@@ -25,19 +28,21 @@ export function map<T, R>(stream: ReadableStream<T>, select:(chunk:T)=>R, highWa
       controller.error(err);
     }
   }
-  return new ReadableStream<R>({
-    start(controller) {
-      reader = stream.getReader();
-      return flush(controller);
-    },
-    pull(controller) {
-      return flush(controller);
-    },
-    cancel() {
-      if(reader){
-        reader.releaseLock();
-        reader = null;
+  return function(src:ReadableStream<T>){
+    return new ReadableStream<R>({
+      start(controller) {
+        reader = src.getReader();
+        return flush(controller);
+      },
+      pull(controller) {
+        return flush(controller);
+      },
+      cancel() {
+        if(reader){
+          reader.releaseLock();
+          reader = null;
+        }
       }
-    }
-  }, {highWaterMark});
+    }, {highWaterMark});
+  }
 }

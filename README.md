@@ -10,18 +10,20 @@ requires support for async / await
 
 ### from<T>(src: Iterable<T> | AsyncIterable<T> | (()=>Iterable<T> | AsyncIterable<T>)): ReadableStream<T>
 
-turns an interable source into a readable stream
-will not try create an iterator until the result stream is read from. 
+turns an interable source into a readable stream. 
+
+It wiill not try create an iterator until the result stream is read from. 
 
 ```ts
 from([1,2,3,4])
-from(function*(){yield 1, yield 2, yield 3, await Promise.resolve(4)};
+from(function*(){yield 1, yield 2, yield 3, yield 4};
 from(async function*(){yield 1, yield 2, yield 3, await Promise.resolve(4)};
 ```
 
 ### concat<T>(...streams: ReadableStream<T>[]): ReadableStream<T>
 concatinates several streams together in the order given.
-will not read from the streams until the result stream is read from. 
+
+It will not read from the streams until the result stream is read from. 
 
 ```ts
 let inputA = [1,2];
@@ -53,8 +55,9 @@ let result = await toPromise(from([1,2,3,4]));
 ## Piping
 
 given inconsistencies with browser support, there is a pipe method available and all operators only require ReadableStream to be implemented, rather than use the native TransformStream. 
-
 an error in any operator will error and close the whole pipeline
+
+### pipe(src, ...ops): result
 
 ```ts
 let input = [1, 2, 3, 4];
@@ -74,18 +77,10 @@ let result = await toPromise(
 
 ## Operators
 
-### buffer<T>(count: number, highWaterMark): (src:ReadableStream<T>)=>ReadableStream<T[]>
+operators are of the form `type Op<T, R> = (src:ReadableStream<T>)=>ReadableStream<R>`
 
-buffer chunks until the buffer size is `count` length, then enqueues the buffer array and starts a new buffer
 
-```ts
-let input = [1,2,3,4];
-let expected = [[1,2],[3,4]];
-let stream = buffer(2)(input);
-let result = await toArray(stream);
-```
-
-### buffer<T>(count: number, highWaterMark): (src:ReadableStream<T>)=>ReadableStream<T[]>
+### buffer<T>(count: number, highWaterMark): Op<T, T[]>
 
 buffer chunks until the buffer size is `count` length, then enqueues the buffer array and starts a new buffer
 
@@ -96,7 +91,7 @@ let stream = buffer(2)(from(input));
 let result = await toArray(stream);
 ```
 
-### filter<T>(predicate: (chunk: T) => boolean): (src: ReadableStream<T>) => ReadableStream<T>
+### filter<T>(predicate: (chunk: T) => boolean): Op<T, T>
 
 filter out chunks that fail a predicate
 
@@ -107,7 +102,7 @@ let stream = filter(x=>x!=3)(from(input));
 let result = await toArray(stream);
 ```
 
-### first<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableStream<T>) => ReadableStream<T>
+### first<T>(selector:(chunk:T)=>boolean=()=>true): Op<T, T>
 
 returns a stream of exactly one chunk, the first to return true when passed to the selector
 
@@ -118,7 +113,7 @@ let stream = first(x=>x>=3)(from(input));
 let result = await toPromise(stream);
 ```
 
-### last<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableStream<T>) => ReadableStream<T>
+### last<T>(selector:(chunk:T)=>boolean=()=>true): Op<T, T>
 
 returns a stream of exactly one chunk, the last to return true when passed to the selector
 
@@ -129,7 +124,7 @@ let stream = last(x=>x<4)(from(input));
 let result = await toPromise(stream);
 ```
 
-### map<T, R=T>(select:MapSelector<T, R>, highWaterMark): (src:ReadableStream<T>)=>ReadableStream<R>
+### map<T, R=T>(select:MapSelector<T, R>, highWaterMark): Op<T, R>
 
 given a stream of T and selector f(T)->R, return a stream of R, for all f(T) != undefined
 
@@ -140,13 +135,13 @@ let stream = map(x=>x*2)(from(input));
 let result = await toArray(stream);
 ```
 
-### tap<T>(cb: (chunk: T) => void): (src: ReadableStream<T>) => ReadableStream<T>
+### tap<T>(cb: (chunk: T) => void): Op<T, T>
 
 allows observing each chunk, but the output is exactly the same as in the input. 
 
 ```ts
 let input = [1,2,3,4];
-let expected = [2,4,6,8];
+let expected = [1,2,3,4];
 let result = []
 let stream = tap(x=>result.push(x))(from(input));
 let result = await toPromise(stream); //execute

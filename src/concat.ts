@@ -7,7 +7,7 @@ export function concat<T>(...streams: ReadableStream<T>[]): ReadableStream<T>{
     try {      
       if(reader == null) { 
         if(streams.length == 0){
-          return controller.close();          
+          controller.close();     
         }
         reader = streams.shift().getReader();
       }

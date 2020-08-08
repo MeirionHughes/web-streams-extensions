@@ -36,7 +36,7 @@ export function from<T>(src: Iterable<T> | AsyncIterable<T> | (() => Iterable<T>
       return flush(controller);
     },
     async cancel() {
-      if (it) {
+      if (it && it.return) {
         await it.return();
       }
       it = null;

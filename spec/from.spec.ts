@@ -1,5 +1,6 @@
 import { expect } from "chai";
-import { toArray, from } from '../src';
+import { toArray, from, pipe, take, skip, concat } from '../src';
+
 
   describe("from", () => {
     it("can create stream from array", async () => {
@@ -84,5 +85,6 @@ import { toArray, from } from '../src';
 
       expect(error).to.not.be.null;
       expect(error.message).to.be.eq("Foo");
-    })
+    })   
+
   })

@@ -1,6 +1,6 @@
-export function concatAll<T>(): (src: ReadableStream<ReadableStream<T>>) => ReadableStream<T> {
+export function concatAll<T>(): (src: ReadableStream<ReadableStream<T>> | ReadableStream<Promise<T>>) => ReadableStream<T> {
   return function (src: ReadableStream<ReadableStream<T>>) {
-    let readerSrc:  ReadableStreamDefaultReader<ReadableStream<T>> = null;
+    let readerSrc:  ReadableStreamDefaultReader<ReadableStream<T> | Promise<T>> = null;
     let reader: ReadableStreamDefaultReader<T> = null;
 
     async function flush(controller: ReadableStreamDefaultController<T>) {
@@ -10,7 +10,13 @@ export function concatAll<T>(): (src: ReadableStream<ReadableStream<T>>) => Read
           if(next.done){
             controller.close();
           }else{
-            reader = next.value.getReader();
+            let src = await next.value;
+            if(isReadableStream(src)){ 
+              reader = src.getReader();
+            }else{
+              controller.enqueue(src);
+              return;            
+            }      
           }
         }
 
@@ -46,4 +52,11 @@ export function concatAll<T>(): (src: ReadableStream<ReadableStream<T>>) => Read
       }
     });
   }
+}
+
+function isReadableStream(obj): obj is ReadableStream {
+  if(obj.getReader != undefined){
+    return true;
+  }
+  return false;
 }

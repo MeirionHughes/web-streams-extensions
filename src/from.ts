@@ -1,4 +1,4 @@
-export function from<T>(src: Iterable<T> | AsyncIterable<T> | (() => Iterable<T> | AsyncIterable<T>)): ReadableStream<T> {
+export function from<T>(src: Promise<T> | Iterable<T> | AsyncIterable<T> | (() => Iterable<T> | AsyncIterable<T>)): ReadableStream<T> {
 
   let it: Iterator<T> | AsyncIterator<T>;
 
@@ -26,7 +26,12 @@ export function from<T>(src: Iterable<T> | AsyncIterable<T> | (() => Iterable<T>
 
       if (Symbol.asyncIterator && src[Symbol.asyncIterator]) iterable = src[Symbol.asyncIterator].bind(src);
       else if (src[Symbol.iterator]) iterable = src[Symbol.iterator].bind(src);
-      else throw Error("source is not iterable");
+      else {
+        let value = await Promise.resolve(src as (T | Promise<T>));
+        controller.enqueue(value);
+        controller.close();
+        return;
+      }
 
 
       it = iterable();

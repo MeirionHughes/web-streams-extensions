@@ -39,7 +39,7 @@ let result = await toArray(stream);
 
 ## Consuming
 
-### toArray
+### toArray(src: ReadableStream<T>): T[]
 
 ```ts
 let input = [1,2,3,4];
@@ -47,13 +47,30 @@ let expected = [1,2,3,4];
 let result = await toArray(from([1,2,3,4]))
 ```
 
-### toPromise
+### toPromise(src: ReadableStream<T>): T
 await exhaustion of the stream and return the last entry
 
 ```ts
 let input = [1,2,3,4];
 let expected = 4;
 let result = await toPromise(from([1,2,3,4]));
+```
+
+### subscribe(src, next, complete, error): ()=>void
+
+immediately begins to read from src, passing each chunk to the `next` callback and awaiting if it returns a promise. 
+once the source signals the end of the stream, `complete` is called. 
+if the source stream throws an error, this is passed to the `error` callback
+returns a disposer method to stop reading
+
+```ts 
+let src = from(function*(){yield 1, yield 2, yield 3})
+
+subscribe(src, 
+  (next)=>{ console.log("Next:", next);})
+  ()=>{console.log("Complete")}
+  (err)=>{console.log("Error:", err)}
+);
 ```
 
 ## Piping

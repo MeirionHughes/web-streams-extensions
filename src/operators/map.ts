@@ -5,22 +5,22 @@
  * @param select a method to select R given a T, undefined values are not enqueued 
  * @param highWaterMark max cache size of stream<R>
  */
-export interface MapSelector<T, R>{
-  (chunk:T):R;
+export interface MapSelector<T, R> {
+  (chunk: T): R;
 }
-export function map<T, R=T>(select:MapSelector<T, R>, highWaterMark = 32): (src:ReadableStream<T>)=>ReadableStream<R>{ 
+export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T>, opts?: { highWaterMark: number }) => ReadableStream<R> {
   let reader: ReadableStreamDefaultReader<T> = null;
 
   async function flush(controller: ReadableStreamDefaultController<R>) {
     try {
       while (controller.desiredSize > 0 && reader != null) {
         let next = await reader.read();
-        if(next.done){
+        if (next.done) {
           controller.close();
-          reader = null;         
-        }else {
+          reader = null;
+        } else {
           let mapped = select(next.value);
-          if(mapped !== undefined)
+          if (mapped !== undefined)
             controller.enqueue(mapped);
         }
       }
@@ -28,7 +28,7 @@ export function map<T, R=T>(select:MapSelector<T, R>, highWaterMark = 32): (src:
       controller.error(err);
     }
   }
-  return function(src:ReadableStream<T>){
+  return function (src: ReadableStream<T>, opts?: { highWaterMark: number }) {
     return new ReadableStream<R>({
       start(controller) {
         reader = src.getReader();
@@ -38,11 +38,11 @@ export function map<T, R=T>(select:MapSelector<T, R>, highWaterMark = 32): (src:
         return flush(controller);
       },
       cancel() {
-        if(reader){
+        if (reader) {
           reader.releaseLock();
           reader = null;
         }
       }
-    }, {highWaterMark});
+    }, opts );
   }
 }

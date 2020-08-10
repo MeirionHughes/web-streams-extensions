@@ -1,7 +1,7 @@
 
 
 export interface UnaryFunction<T, R> {
-  (source: T): R;
+  (source: T, opt?: { highWaterMark: number }): R;
 }
 
 export interface Op<T, R> extends UnaryFunction<ReadableStream<T>, ReadableStream<R>> {
@@ -14,6 +14,6 @@ export function pipe<T, A, B, C>(src: ReadableStream<T>, op1: Op<T, A>, op2: Op<
 export function pipe<T, A, B, C, D>(src: ReadableStream<T>, op1: Op<T, A>, op2: Op<A, B>, op3: Op<B, C>, op4: Op<C, D>): ReadableStream<D>;
 export function pipe<T, A, B, C, D, E>(src: ReadableStream<T>, op1: Op<T, A>, op2: Op<A, B>, op3: Op<B, C>, op4: Op<C, D>, op5: Op<D, E>): ReadableStream<E>;
 export function pipe<T, A, B, C, D, E, F>(src: ReadableStream<T>, op1: Op<T, A>, op2: Op<A, B>, op3: Op<B, C>, op4: Op<C, D>, op5: Op<D, E>, op6: Op<E, F>): ReadableStream<F>;
-export function pipe(src: ReadableStream<any>, ...ops: Op<any, any>[]): ReadableStream<any>{
-  return ops.reduce((p,c)=>c(p),src);
+export function pipe(src: ReadableStream<any>, ...ops: Op<any, any>[]): ReadableStream<any> {
+  return ops.reduce((p, c) => c(p, { highWaterMark: 1 }), src);
 }

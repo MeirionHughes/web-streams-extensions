@@ -1,5 +1,7 @@
 import { expect } from "chai";
-import { toArray, from, pipe, take, skip, concat } from '../src';
+import { toArray, from, pipe, take, skip, concat, concatAll, toPromise } from '../src';
+
+
 
 
   describe("from", () => {
@@ -8,6 +10,15 @@ import { toArray, from, pipe, take, skip, concat } from '../src';
       let expected = inputA.slice();
 
       let result = await toArray(from(inputA));
+
+      expect(result, "from stream result matches expected").to.be.deep.eq(expected);
+    })   
+    
+    it("can create stream from promise", async () => {
+      let inputA = [1, 2, 3, 4];
+      let expected = inputA.slice();
+
+      let result = await toPromise(pipe(from(Promise.resolve(inputA))));
 
       expect(result, "from stream result matches expected").to.be.deep.eq(expected);
     })

@@ -15,7 +15,7 @@ describe("concat operator", () => {
 
     expect(result, "stream result matches expected").to.be.deep.eq(expected);
   })
-  
+
   it("can concatenate stream of promises ", async () => {
     let input = from([Promise.resolve(1), Promise.resolve(2)])
     let expected = [1, 2]

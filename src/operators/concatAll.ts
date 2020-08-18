@@ -1,4 +1,6 @@
-export function concatAll<T>(): (src: ReadableStream<ReadableStream<T>> | ReadableStream<Promise<T>>) => ReadableStream<T> {
+import { isReadableStream } from "../utils/is-readable";
+
+export function concatAll<T>(): (src: ReadableStream<ReadableStream<T>> | ReadableStream<Promise<T>> | ReadableStream<T[]>) => ReadableStream<T> {
   return function (src: ReadableStream<ReadableStream<T>>) {
     let readerSrc:  ReadableStreamDefaultReader<ReadableStream<T> | Promise<T>> = null;
     let reader: ReadableStreamDefaultReader<T> = null;
@@ -7,11 +9,16 @@ export function concatAll<T>(): (src: ReadableStream<ReadableStream<T>> | Readab
       try {        
         if (reader == null) {
           let next = await readerSrc.read();
+
           if(next.done){
             controller.close();
           }else{
             let src = await next.value;
-            if(isReadableStream(src)){ 
+            if(Array.isArray(src)){
+              for(let item of src){
+                controller.enqueue(item);
+              }
+            }else if(isReadableStream(src)){ 
               reader = src.getReader();
             }else{
               controller.enqueue(src);
@@ -54,9 +61,3 @@ export function concatAll<T>(): (src: ReadableStream<ReadableStream<T>> | Readab
   }
 }
 
-function isReadableStream(obj): obj is ReadableStream {
-  if(obj.getReader != undefined){
-    return true;
-  }
-  return false;
-}

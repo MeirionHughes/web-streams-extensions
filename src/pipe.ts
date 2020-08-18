@@ -1,11 +1,4 @@
-
-
-export interface UnaryFunction<T, R> {
-  (source: T, opt?: { highWaterMark: number }): R;
-}
-
-export interface Op<T, R> extends UnaryFunction<ReadableStream<T>, ReadableStream<R>> {
-}
+import { Op } from "./_op";
 
 export function pipe<T>(src: ReadableStream<T>): ReadableStream<T>;
 export function pipe<T, A>(src: ReadableStream<T>, op1: Op<T, A>): ReadableStream<A>;

@@ -1,6 +1,6 @@
 import { isReadableStream } from "../utils/is-readable";
 
-export function concatAll<T>(): (src: ReadableStream<ReadableStream<T>> | ReadableStream<Promise<T>> | ReadableStream<T[]>) => ReadableStream<T> {
+export function concatAll<T>(): (src: ReadableStream<ReadableStream<T>> | ReadableStream<Promise<T[] | T> | T[] | T>) => ReadableStream<T> {
   return function (src: ReadableStream<ReadableStream<T>>) {
     let readerSrc:  ReadableStreamDefaultReader<ReadableStream<T> | Promise<T>> = null;
     let reader: ReadableStreamDefaultReader<T> = null;

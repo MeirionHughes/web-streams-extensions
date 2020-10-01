@@ -1,6 +1,7 @@
 export * from "./operators";
 
 export * from "./concat";
+export * from "./defer";
 export * from "./from";
 export * from "./join";
 export * from "./pipe";

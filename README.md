@@ -30,11 +30,22 @@ It will not read from the streams until the result stream is read from.
 
 ```ts
 let inputA = [1,2];
-let inputB = [1,2];
+let inputB = [3,4];
 let expected = [1,2,3,4];
 let stream = concat(from(inputA), from(inputB));
 let result = await toArray(stream);
 ```
+
+### defer<T>(cb: ()=>Promise<ReadableStream<T>> | ReadableStream<T>): ReadableStream<T>
+await a callback method that returns a readable-stream
+
+```ts
+let input = [1,2,3,4];
+let expected = [1,2,3,4];
+
+let result = await toArray(defer(x=>Promise.resolve(from(input))));
+```
+
 
 
 ## Consuming

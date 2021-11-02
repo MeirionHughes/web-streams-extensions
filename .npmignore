@@ -6,3 +6,4 @@ src
 spec
 yarn.lock
 tsconfig*
+yarn-error.log

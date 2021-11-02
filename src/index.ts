@@ -1,5 +1,8 @@
 export * from "./operators";
 
+export * from './_op';
+export * from './_subject';
+
 export * from "./concat";
 export * from "./defer";
 export * from "./from";
@@ -9,3 +12,7 @@ export * from "./to-array";
 export * from "./to-promise";
 export * from "./to-string";
 export * from "./zip";
+
+export * from "./subject";
+export * from "./subscribe";
+

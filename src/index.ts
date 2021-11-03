@@ -2,6 +2,7 @@ export * from "./operators";
 
 export * from './_op';
 export * from './_subject';
+export * from './_readable-like';
 
 export * from "./concat";
 export * from "./defer";

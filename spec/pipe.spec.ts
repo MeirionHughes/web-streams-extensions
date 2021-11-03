@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { Subject } from "../src";
 import { toArray, from, pipe, filter, buffer, map, first, toPromise } from '../src';
 
 describe("pipe", () => {
@@ -17,6 +18,27 @@ describe("pipe", () => {
         }),
         first()
       ));
+
+    expect(result, "from stream result matches expected").to.be.deep.eq(expected);
+  })
+
+  it("can pipe from readable-like sources (subject)", async () => {
+    let inputA = [1, 2, 3, 4];
+    
+    let mapper = (x:number)=>x*10;
+    let expected = inputA.slice().map(mapper)
+
+    let src = new Subject<number>();
+
+    let resultPromise = toArray(
+      pipe(
+        src,
+        map(mapper)
+      ));
+
+    from(inputA).pipeTo(src.writable);
+
+    let result = await resultPromise;
 
     expect(result, "from stream result matches expected").to.be.deep.eq(expected);
   })

@@ -30,6 +30,29 @@ describe("subject", () => {
     expect(result3).to.be.deep.eq(expected3);
   })
 
+  it("can observe with multiple readers - ending one doesn't affect other", async () => {
+    let input = [1, 2, 3, 4];
+    let expected1 = input.slice();
+    let expected2 = input.slice(0, 2);
+
+    let sub = new Subject<number>();
+
+    let resultPromise1 = toArray(sub);
+    let resultPromise2 = toArray(pipe(sub.readable, take(2)));
+
+    for (let item of input) {
+      await sub.next(item);
+    }
+    await sub.complete();
+
+    let result1 = await resultPromise1;
+    let result2 = await resultPromise2;
+
+
+    expect(result1).to.be.deep.eq(expected1);
+    expect(result2).to.be.deep.eq(expected2);
+  })
+
   it("completing a subject stops pipe through", async () => {
     let src = new Subject();
     let subject = new Subject();
@@ -52,7 +75,7 @@ describe("subject", () => {
     expect(result2).to.be.deep.eq([1, 2]);
   })
 
-  
+
   it("completing a writable completes subject", async () => {
     let subject = new Subject();
 
@@ -68,16 +91,16 @@ describe("subject", () => {
     let result = null;
 
     pipe(new ReadableStream({
-      start(controller){
-      }, 
-      pull(controller){
+      start(controller) {
+      },
+      pull(controller) {
         controller.error("foo");
       }
     })).pipeTo(subject.writable);
 
-    try{
-    let result = await toArray(subject.readable);
-    }catch(err){
+    try {
+      let result = await toArray(subject.readable);
+    } catch (err) {
       result = err;
     }
 

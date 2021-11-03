@@ -10,6 +10,23 @@ describe("to-promise", () => {
 
     expect(result, "from stream result matches expected").to.be.deep.eq(expected);
   })  
+    
+  it("can create promise from readable", async () => {
+    let inputA = [1, 2, 3, 4];
+    let expected = 4;
+
+    let src = from(inputA);
+
+    let transform = new TransformStream();
+
+    let resultPromise = toPromise(transform);
+    
+    src.pipeTo(transform.writable);
+
+    let result = await resultPromise;
+
+    expect(result, "from stream result matches expected").to.be.deep.eq(expected);
+  })
   
   it("can throw errors", async () => {
     let inputA = [1, 2, 3, 4];

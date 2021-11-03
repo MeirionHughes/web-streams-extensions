@@ -1,5 +1,13 @@
-export async function toArray<T>(src: ReadableStream<T>): Promise<T[]>{
+import { isReadableLike, ReadableLike } from "./_readable-like";
+
+export async function toArray<T>(src: ReadableLike<T>): Promise<T[]>
+export async function toArray<T>(src: ReadableStream<T>): Promise<T[]>
+export async function toArray<T>(src: ReadableLike<T> | ReadableStream<T>): Promise<T[]>{
   let res: T[] = [];
+
+  if(isReadableLike(src)){
+    src = src.readable;
+  }
 
   let reader = src.getReader();
   let done = false;

@@ -1,18 +1,18 @@
 import { expect } from "chai";
-import { toArray, pipe, map, take, toPromise, from } from '../src';
+import { toArray, pipe, map, take, toPromise, from, tap } from '../src';
 import { Subject } from "../src/subject";
 
 describe("subject", () => {
   it("can observe with multiple readers - manual write", async () => {
     let input = [1, 2, 3, 4];
     let expected1 = input.slice();
-    let expected2 = input.map(x=>x*2);
+    let expected2 = input.map(x => x * 2);
     let expected3 = input[0];
 
     let subject = new Subject<number>();
 
     let resultPromise1 = toArray(subject.readable);
-    let resultPromise2 = toArray(pipe(subject.readable, map(x=>x*2)));
+    let resultPromise2 = toArray(pipe(subject.readable, map(x => x * 2)));
     let resultPromise3 = toPromise(pipe(subject.readable, take(1)));
 
     subject.next(1);
@@ -29,17 +29,72 @@ describe("subject", () => {
     expect(result2).to.be.deep.eq(expected2);
     expect(result3).to.be.deep.eq(expected3);
   })
+
+  it("completing a subject stops pipe through", async () => {
+    let src = new Subject();
+    let subject = new Subject();
+    let pulled = [];
+
+    pipe(src.readable).pipeTo(subject.writable);
+
+    let outputTask = toArray(subject.readable);
+    let outputTask2 = toArray(src.readable);
+
+    await src.next(1);
+    await subject.complete();
+    await src.next(2);
+    await src.complete();
+
+    let result = await outputTask;
+    let result2 = await outputTask2;
+
+    expect(result).to.be.deep.eq([1]);
+    expect(result2).to.be.deep.eq([1, 2]);
+  })
+
   
+  it("completing a writable completes subject", async () => {
+    let subject = new Subject();
+
+    pipe(from([1, 2, 3, 4])).pipeTo(subject.writable);
+
+    let result = await toArray(subject.readable);
+
+    expect(result).to.be.deep.eq([1, 2, 3, 4]);
+  })
+
+  it("erroring a writable errors the subscribers", async () => {
+    let subject = new Subject();
+    let result = null;
+
+    pipe(new ReadableStream({
+      start(controller){
+      }, 
+      pull(controller){
+        controller.error("foo");
+      }
+    })).pipeTo(subject.writable);
+
+    try{
+    let result = await toArray(subject.readable);
+    }catch(err){
+      result = err;
+    }
+
+    expect(result).to.be.eq('foo');
+  })
+
+
   it("can pipeTo", async () => {
     let input = [1, 2, 3, 4];
     let expected1 = input.slice();
-    let expected2 = input.map(x=>x*2);
+    let expected2 = input.map(x => x * 2);
     let expected3 = input[0];
 
     let subject = new Subject<number>();
 
     let resultPromise1 = toArray(subject.readable);
-    let resultPromise2 = toArray(pipe(subject.readable, map(x=>x*2)));
+    let resultPromise2 = toArray(pipe(subject.readable, map(x => x * 2)));
     let resultPromise3 = toPromise(pipe(subject.readable, take(1)));
 
     from(input).pipeTo(subject.writable);
@@ -53,7 +108,6 @@ describe("subject", () => {
     expect(result3).to.be.deep.eq(expected3);
   })
 
-    
   it("can pipeThrough", async () => {
     let input = [1, 2, 3, 4];
     let expected = input.slice();

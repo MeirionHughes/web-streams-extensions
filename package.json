@@ -7,8 +7,8 @@
   "types": "dist/esm/index.d.ts",
   "scripts": {
     "clean": "rimraf dist && rimraf coverage && rimraf .nyc_output",
-    "build:esm": "tsc --module es2020 --target es2020 --outDir ./dist/esm --declaration true --project tsconfig-build.json",
-    "build:cjs": "tsc --module commonjs --target es2020 --outDir ./dist/cjs --project tsconfig-build.json",
+    "build:esm": "tsc --module es2020 --outDir ./dist/esm --declaration true --project tsconfig-build.json",
+    "build:cjs": "tsc --module commonjs --outDir ./dist/cjs --project tsconfig-build.json",
     "build": "concurrently \"npm run build:cjs\" \"npm run build:esm\"",
     "test": "nyc node_modules/mocha/bin/_mocha spec/**/*.ts",
     "cover": "codecov",
@@ -41,11 +41,9 @@
     "mocha": "^8.1.1",
     "nyc": "^15.1.0",
     "rimraf": "^3.0.2",
-    "tempy": "^0.7.1",
     "ts-node": "^8.10.2",
-    "typescript": "^3.9.7",
-    "web-streams-node": "^0.4.0",
-    "web-streams-polyfill": "^3.0.0"
+    "typescript": "^4.4",
+    "web-streams-polyfill": "^3.1.1"
   },
   "nyc": {
     "include": [
@@ -58,10 +56,10 @@
     "extension": [
       ".ts"
     ],
-    "require": [
-      "web-streams-polyfill",
+    "require": [  
       "source-map-support/register",
-      "ts-node/register"
+      "ts-node/register",
+      "web-streams-polyfill"
     ],
     "reporter": [
       "text-summary",

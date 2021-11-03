@@ -1,12 +1,11 @@
 {
   "compilerOptions": {
-    "target": "es2015",
+    "target": "es2020",
     "module": "commonjs",
     "moduleResolution": "node",
     "lib": [
-      "ES2015",
-      "ES2018.AsyncIterable",
-      "DOM"      
+      "es2020",
+      "DOM"
     ]
   },
   "exclude": ["node_modules"]

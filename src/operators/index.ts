@@ -7,3 +7,4 @@ export * from "./map";
 export * from "./skip";
 export * from "./take";
 export * from "./tap";
+export * from "./through"; 

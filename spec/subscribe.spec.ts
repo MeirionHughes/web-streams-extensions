@@ -41,7 +41,7 @@ describe("subscribe", () => {
     let result = null;
 
     try {
-      await new Promise((complete, error) => {
+      await new Promise<void>((complete, error) => {
         subscribe(from(inputA),
           (next) => {},
           () => complete(),

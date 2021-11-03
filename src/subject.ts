@@ -1,47 +1,32 @@
 import { ISubject } from "./_subject";
+import { Subscribable } from "./_subscribable";
+import { Subscription } from "./_subscription";
 
-export interface Subscriber<T> {
-  next(value): number;
-  complete(): void;
-  error(err: any): void;
-}
 
-export interface Subscription {
-  dispose(): void;
-}
-
-class Subscribable<T>{
-  subscribers: Subscriber<T>[] = [];
-
-  subscribe(cb: Subscriber<T>): Subscription {
-    let self = this;
-
-    self.subscribers.push(cb);
-
-    return {
-      dispose() {
-        let index = self.subscribers.findIndex(x => x === cb);
-        if (index >= 0) {
-          self.subscribers.splice(index, 1);
-        }
-      }
-    }
+class WritableStreamEx<W = any> extends WritableStream<W>{
+  constructor(private _closed: Promise<unknown>, underlyingSink?: UnderlyingSink<W>, strategy?: QueuingStrategy<W>) {
+    super(underlyingSink, strategy);
   }
-  next(value: T): number {
-    return Math.min(...this.subscribers.map(x => x.next(value)));
-  }
-  complete() {
-    this.subscribers.forEach(x => x.complete());
-    this.subscribers = [];
-  }
-  error(err) {
-    this.subscribers.forEach(x => x.error(err));
+
+  getWriter(): WritableStreamDefaultWriter<W> {
+    const writer = new WritableStreamDefaultWriter(this);
+    this._closed.then(async x => {
+      await writer.close();
+      await writer.releaseLock();
+    })
+    return writer;
   }
 }
+
 
 export class Subject<T> implements ISubject<T>{
   private _subscribable = new Subscribable<T>();
-  private _writable: WritableStream<T>;
+  private _closingResolve: (value: unknown) => void;
+  private _closing = new Promise((r) => this._closingResolve = r)
+
+  get closed() {
+    return this._subscribable.closed;
+  }
 
   /** create a new readable */
   get readable(): ReadableStream<T> {
@@ -73,35 +58,47 @@ export class Subject<T> implements ISubject<T>{
     })
   };
 
-  get writable(){
-    return this._writable;
-  }
-
-  constructor() {
-    let self = this;
+  get writable() {
     const queuingStrategy = new CountQueuingStrategy({ highWaterMark: 1 });
-    this._writable = new WritableStream({
-      write(chunk, controller) {
-        self.next(chunk);
-      },
-      close(){
-        self.complete();
-      },
-      abort(reason){
-        self.error(reason);
-      }            
-    }, queuingStrategy);
+    const self = this;
+    return new WritableStreamEx(
+      this._closing,
+      {
+        write(chunk, controller) {
+          self._next(chunk);
+        },
+        close() {
+          self._complete();
+        },
+        abort(reason) {
+          self._error(reason);
+        }
+      }, queuingStrategy);
   }
 
-  next(value:T):number{
+  private _next(value: T): number {
     return this._subscribable.next(value);
   }
 
-  complete(){
-    this._subscribable.complete();    
+  private _complete() {
+    this._subscribable.complete();
   }
 
-  error(err: any){
+  private _error(err: any) {
     this._subscribable.error(err);
+  }
+
+  async next(value: T): Promise<number> {
+    return this._next(value);
+  }
+
+  async complete() {
+    this._closingResolve(void 0);
+    return this._complete();
+  }
+
+  async error(err: any) {
+    this._closingResolve(void 0);
+    return this._error(err);
   }
 }

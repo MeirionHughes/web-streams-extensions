@@ -20,4 +20,26 @@ describe("pipe", () => {
 
     expect(result, "from stream result matches expected").to.be.deep.eq(expected);
   })
+
+  it("can pipe transformer", async () => {
+    let inputA = [1, 2, 3, 4];
+
+    let expected = [1, 2, 4];
+
+    let filter = new TransformStream<number, number>({
+      transform(chunk, controller) {
+        if (chunk != 3) {
+          controller.enqueue(chunk);
+        }
+      }
+    })
+
+    let result = await toArray(
+      pipe(
+        from(inputA),
+        filter
+      ));
+
+    expect(result, "from stream result matches expected").to.be.deep.eq(expected);
+  })
 })

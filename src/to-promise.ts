@@ -10,7 +10,7 @@ export async function toPromise<T>(src: ReadableStream<T>): Promise<T>{
   while(done == false){
     let next = await reader.read();
     done = next.done;
-    if(!done) res = next.value;   
+    if(!done) res = next.value;
   }
   return res;
 }

@@ -1,7 +1,6 @@
+
 export interface UnaryFunction<T, R> {
-  (source: T, opt?: { highWaterMark: number }): R;
+  (source: T, opt?: { highWaterMark?: number }): R;
 }
 
-export interface Op<T, R> extends UnaryFunction<ReadableStream<T>, ReadableStream<R>> {
-
-}
+export type Op<T, R> = UnaryFunction<ReadableStream<T>, ReadableStream<R>> | TransformStream<T, R>;

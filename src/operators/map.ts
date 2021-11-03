@@ -6,7 +6,7 @@
  * @param highWaterMark max cache size of stream<R>
  */
 export interface MapSelector<T, R> {
-  (chunk: T): R;
+  (chunk: T): R | Promise<R>
 }
 export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T>, opts?: { highWaterMark: number }) => ReadableStream<R> {
   let reader: ReadableStreamDefaultReader<T> = null;
@@ -19,7 +19,7 @@ export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T
           controller.close();
           reader = null;
         } else {
-          let mapped = select(next.value);
+          let mapped = await select(next.value);
           if (mapped !== undefined)
             controller.enqueue(mapped);
         }

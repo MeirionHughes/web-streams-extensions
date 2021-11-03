@@ -20,9 +20,10 @@ describe("steams", () => {
     let expected = [1,2,3,4];
     let result = pulled.slice();
     
-    let full = await toArray(buffer.readable);
-    
+    let full = await toArray(buffer.readable); // drain the buffer to pull the remainder
 
     expect(result, "concat result matches expected").to.be.deep.eq(expected);
-  })
+    expect(pulled, "concat result matches expected").to.be.deep.eq(inputA);
+  }) 
+  
 })

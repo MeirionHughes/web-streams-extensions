@@ -1,6 +1,6 @@
 {
   "name": "web-streams-extensions",
-  "version": "0.4.6",
+  "version": "0.5.0",
   "description": "helper methods to create, pipe and map webstreams",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
@@ -56,7 +56,7 @@
     "extension": [
       ".ts"
     ],
-    "require": [  
+    "require": [
       "source-map-support/register",
       "ts-node/register",
       "web-streams-polyfill"

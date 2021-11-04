@@ -1,14 +1,25 @@
+import { isReadableLike, ReadableLike } from ".";
+import { SubscriptionLike } from "./_subscription";
 
 /**  */
 export function subscribe<T>(
-  src: ReadableStream<T>,
+  src: ReadableStream<T> | ReadableLike,
   next: (value: T) => Promise<void> | void,
   complete?: () => void,
-  error?: (err) => void): () => void {
+  error?: (err) => void): SubscriptionLike {
+
+  if (isReadableLike(src)) {
+    src = src.readable;
+  }
 
   let reader = src.getReader();
-  let disposer = function () {
-    reader.cancel();
+
+  let sub = {
+    closed: false,
+    unsubscribe() {
+      reader.cancel();
+      this.closed = true;
+    }
   }
 
   reader.closed.then(
@@ -26,7 +37,7 @@ export function subscribe<T>(
           try {
             await next(chunk.value)
           } catch (err) {
-            disposer()
+            sub.unsubscribe();
           }
         } else {
           reader = null;
@@ -37,6 +48,6 @@ export function subscribe<T>(
 
   start();
 
-  return disposer;
+  return sub;
 }
 

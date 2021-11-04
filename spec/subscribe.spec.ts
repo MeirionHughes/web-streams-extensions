@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from } from '../src';
+import { toArray, from, Subject } from '../src';
 import { subscribe } from "../src/subscribe";
 
 describe("subscribe", () => {
@@ -20,6 +20,23 @@ describe("subscribe", () => {
     expect(result, "from stream result matches expected").to.be.deep.eq(expected);
   })
 
+  it("subscribe is closed when disposed", async () => {
+    let inputA = [1, 2, 3, 4];
+
+    let expected = inputA.slice();
+
+    let src = new Subject();
+
+    let sub = subscribe(src, (next) => {});
+
+    sub.unsubscribe();
+
+
+
+    expect(sub.closed, "from stream result matches expected").to.be.eq(true);
+  })
+
+
   it("can subscribe and dispose before reading the whole stream", async () => {
     let inputA = [1, 2, 3, 4];
     let expected = [1, 2];
@@ -27,8 +44,8 @@ describe("subscribe", () => {
     let result = await new Promise((complete, error) => {
       let count = 0;
       let tmp: number[] = [];
-      let dispose = subscribe(from(inputA),
-        (next) => { tmp.push(next); if (++count >= 2) { dispose() } },
+      let sub = subscribe(from(inputA),
+        (next) => { tmp.push(next); if (++count >= 2) { sub.unsubscribe() } },
         () => complete(tmp),
         (err) => error(err));
     })

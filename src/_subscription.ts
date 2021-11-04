@@ -4,6 +4,7 @@ export interface Subscriber<T> {
   error(err: any): void;
 }
 
-export interface Subscription {
-  dispose(): void;
+export interface SubscriptionLike {
+  closed: boolean;
+  unsubscribe(): void;
 }

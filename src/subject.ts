@@ -1,6 +1,6 @@
 import { ISubject } from "./_subject";
 import { Subscribable } from "./_subscribable";
-import { Subscription } from "./_subscription";
+import { SubscriptionLike } from "./_subscription";
 
 
 class WritableStreamEx<W = any> extends WritableStream<W>{
@@ -31,7 +31,7 @@ export class Subject<T> implements ISubject<T>{
   /** create a new readable */
   get readable(): ReadableStream<T> {
     let self = this;
-    let subscription: Subscription;
+    let subscription: SubscriptionLike;
     let cancelled = false;
     return new ReadableStream({
       async start(controller) {
@@ -52,7 +52,7 @@ export class Subject<T> implements ISubject<T>{
       cancel() {
         cancelled = true;
         if (subscription) {
-          subscription.dispose();
+          subscription.unsubscribe();
         }
       }
     })

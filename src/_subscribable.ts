@@ -1,20 +1,23 @@
-import { Subscriber, Subscription } from "./_subscription";
+import { Subscriber, SubscriptionLike } from "./_subscription";
 
 export class Subscribable<T>{
   closed: boolean = false;
   subscribers: Subscriber<T>[] = [];
 
-  subscribe(cb: Subscriber<T>): Subscription {
+  subscribe(cb: Subscriber<T>): SubscriptionLike {
     let self = this;
 
     self.subscribers.push(cb);
 
+    let _closed = false;
     return {
-      dispose() {
+      get closed() { return _closed || self.closed },
+      unsubscribe() {
         let index = self.subscribers.findIndex(x => x === cb);
         if (index >= 0) {
           self.subscribers.splice(index, 1);
         }
+        _closed = true;
       }
     }
   }

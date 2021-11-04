@@ -2,8 +2,8 @@ import { expect } from "chai";
 import { toArray, concat, pipe, tap, from} from '../../src';
 import { sleep } from "../../src/utils/sleep";
 
-describe("steams", () => {
-  it("writable can buffer until read from", async () => {
+describe("streams", () => {
+  it("writable can buffer until read from using watermark", async () => {
     let inputA = [1, 2, 3, 4, 5, 6, 7, 8];
     
     // 4 will be read - but the writer will block trying to write the 4th

@@ -53,6 +53,30 @@ describe("subject", () => {
     expect(result2).to.be.deep.eq(expected2);
   })
 
+  it("can observe with multiple readers - cancelling one does not cancel subject", async () => {
+    let input = [1, 2, 3, 4];
+    let expected1 = input.slice();
+    let expected2 = input.slice(0, 2);
+
+    let sub = new Subject<number>();
+
+    let resultPromise1 = toArray(sub);
+    
+    let reader = sub.readable.getReader();
+
+    reader.cancel('foo');
+
+    for (let item of input) {
+      await sub.next(item);
+    }
+    await sub.complete();
+
+    let result1 = await resultPromise1;
+
+
+    expect(result1).to.be.deep.eq(expected1);
+  })
+
   it("completing a subject stops pipe through", async () => {
     let src = new Subject();
     let subject = new Subject();

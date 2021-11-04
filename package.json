@@ -1,6 +1,6 @@
 {
   "name": "web-streams-extensions",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "helper methods to create, pipe and map webstreams",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",

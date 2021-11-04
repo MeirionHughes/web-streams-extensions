@@ -21,7 +21,8 @@ export function last<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableStr
           }  
         }
       },
-      cancel(){
+      cancel(reason?:any){
+        reader.cancel(reason);
         reader.releaseLock();
         reader = null;
       }    

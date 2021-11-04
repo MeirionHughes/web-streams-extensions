@@ -36,8 +36,9 @@ export function take<T>(count: number, highWaterMark = 16): (src:ReadableStream<
       pull(controller) {
         return flush(controller);
       },
-      cancel() {
+      cancel(reason?:any) {
         if(reader){
+          reader.cancel(reason);
           reader.releaseLock();
           reader = null;
         }

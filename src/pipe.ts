@@ -19,7 +19,6 @@ export function pipe(src: ReadableSource<any>, ...ops: Op<any, any>[]): Readable
     .reduce((p, c) => {
       return c(p, { highWaterMark: 1 })
     }, src)
-
 }
 
 function isTransform<T, R>(x: Op<T, R> ): x is TransformStream<T, R>{

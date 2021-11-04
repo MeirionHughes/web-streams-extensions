@@ -30,9 +30,11 @@ export function defer<T>(src:()=>Promise<ReadableStream<T>> | ReadableStream<T>)
     async pull(controller) {
       return flush(controller);
     },
-    async cancel() {
+    cancel(reason?:any) {
       if(reader){
+        reader.cancel(reason);
         reader.releaseLock();
+        reader = null;
       }
     }
   });

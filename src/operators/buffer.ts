@@ -1,3 +1,4 @@
+import { read } from "fs";
 
 /**
  * buffer elements and then send an array to the reader. 
@@ -39,8 +40,9 @@ export function buffer<T>(count: number, highWaterMark = 16): (src:ReadableStrea
       pull(controller) {
         return flush(controller);
       },
-      cancel() {
+      cancel(reason?:any) {
         if(reader){
+          reader.cancel(reason);
           reader.releaseLock();
           reader = null;
         }

@@ -2,27 +2,27 @@ import { isReadableStream } from "../utils/is-readable";
 
 export function concatAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise<T> | ArrayLike<T>>) => ReadableStream<T> {
   return function (src: ReadableStream<ReadableStream<T>>) {
-    let readerSrc:  ReadableStreamDefaultReader<ReadableStream<T> | Promise<T>> = null;
+    let readerSrc: ReadableStreamDefaultReader<ReadableStream<T> | Promise<T>> = null;
     let reader: ReadableStreamDefaultReader<T> = null;
 
     async function flush(controller: ReadableStreamDefaultController<T>) {
-      try {        
+      try {
         if (reader == null) {
           let next = await readerSrc.read();
-          if(next.done){
+          if (next.done) {
             controller.close();
-          }else{
+          } else {
             let src = await next.value;
-            if(Array.isArray(src)){
-              for(let item of src){
+            if (Array.isArray(src)) {
+              for (let item of src) {
                 controller.enqueue(item);
               }
-            }else if(isReadableStream(src)){ 
+            } else if (isReadableStream(src)) {
               reader = src.getReader();
-            }else{
+            } else {
               controller.enqueue(src);
-              return;            
-            }      
+              return;
+            }
           }
         }
 
@@ -41,19 +41,23 @@ export function concatAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise
     }
 
     return new ReadableStream<T>({
-      async start(controller) {       
-        readerSrc = src.getReader(); 
+      async start(controller) {
+        readerSrc = src.getReader();
         return flush(controller);
       },
       async pull(controller) {
         return flush(controller);
       },
-      async cancel() {
+      async cancel(reason?: any) {
         if (readerSrc) {
+          readerSrc.cancel(reason);
           readerSrc.releaseLock();
+          readerSrc = null;
         }
         if (reader) {
-          readerSrc.releaseLock();
+          reader.cancel(reason);
+          reader.releaseLock();
+          reader = null;
         }
       }
     });

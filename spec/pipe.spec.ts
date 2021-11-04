@@ -24,8 +24,8 @@ describe("pipe", () => {
 
   it("can pipe from readable-like sources (subject)", async () => {
     let inputA = [1, 2, 3, 4];
-    
-    let mapper = (x:number)=>x*10;
+
+    let mapper = (x: number) => x * 10;
     let expected = inputA.slice().map(mapper)
 
     let src = new Subject<number>();
@@ -64,4 +64,33 @@ describe("pipe", () => {
 
     expect(result, "from stream result matches expected").to.be.deep.eq(expected);
   })
+
+  it("cancelled reader reason propagates ", async () => {
+    let inputA = [1, 2, 3, 4];
+
+    let expected = 'foo';
+    let result = null;
+
+
+    let src = pipe(
+      new ReadableStream({
+        cancel(reason) {
+          result = reason;
+        }
+      }),
+      filter(x => x != 3),
+      buffer(Infinity),
+      map(x => {
+        return x.reduce((p, c) => { p[c.toString()] = c; return p }, {});
+      }),
+      first()
+    );
+
+    let reader = src.getReader();
+
+    reader.cancel(expected);
+
+    expect(result, "cancel reason was propagated").to.be.deep.eq(expected);
+  })
+
 })

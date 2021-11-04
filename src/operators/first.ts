@@ -21,7 +21,8 @@ export function first<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableSt
           }          
         }
       },
-      cancel(){
+      cancel(reason?:any){
+        reader.cancel(reason);
         reader.releaseLock();
         reader = null;
       }    

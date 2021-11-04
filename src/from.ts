@@ -40,8 +40,11 @@ export function from<T>(src: Promise<T> | Iterable<T> | AsyncIterable<T> | (() =
     async pull(controller) {
       return flush(controller);
     },
-    async cancel() {
-      if (it && it.return) {
+    async cancel(reason?:any) {
+      if(reason && it && it.throw){
+        it.throw(reason);
+      }
+      else if (it && it.return) {        
         await it.return();
       }
       it = null;

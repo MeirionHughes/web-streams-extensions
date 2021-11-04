@@ -37,8 +37,9 @@ export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T
       pull(controller) {
         return flush(controller);
       },
-      cancel() {
+      cancel(reason?:any){        
         if (reader) {
+          reader.cancel(reason);
           reader.releaseLock();
           reader = null;
         }

@@ -18,9 +18,17 @@ export function join<A, B, R>(srcA: ReadableStream<A>, srcB: ReadableStream<B>, 
         controller.enqueue(selector(nexts[0].value, nexts[1].value));
       }      
     },
-    async cancel(){
-      if(readerA) readerA.releaseLock();
-      if(readerB) readerB.releaseLock();
+    async cancel(reason?:any){
+      if(readerA) {
+        readerA.cancel(reason);
+        readerA.releaseLock();
+        readerA = null;
+      }
+      if(readerB) {
+        readerB.cancel(reason);
+        readerB.releaseLock();
+        readerB = null;
+      }
     }
   });   
 }

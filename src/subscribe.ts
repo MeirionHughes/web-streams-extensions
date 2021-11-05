@@ -16,8 +16,11 @@ export function subscribe<T>(
 
   let sub = {
     closed: false,
-    unsubscribe() {
-      reader.cancel();
+    unsubscribe() {    
+      if(reader){  
+        reader.cancel();
+        reader = null;
+      }
       this.closed = true;
     }
   }

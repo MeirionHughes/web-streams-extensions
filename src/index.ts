@@ -1,9 +1,11 @@
 export * from "./operators";
+export * from "./schedulers";
 
 export * from './_op';
 export * from './_subject';
 export * from './_subscription';
 export * from './_readable-like';
+export * from './_scheduler';
 
 export * from "./concat";
 export * from "./defer";
@@ -17,4 +19,6 @@ export * from "./zip";
 
 export * from "./subject";
 export * from "./subscribe";
+
+
 

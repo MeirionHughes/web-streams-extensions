@@ -1,9 +1,8 @@
 import { IScheduler } from "../_scheduler";
 
 /**
- * 
+ * schedule enqueuing stream chunks via a scheduler. 
  * @param scheduler operator to schedule pipe-through 
- * @returns 
  */
 export function schedule<T>(scheduler: IScheduler): (src: ReadableStream<T>, opts?: { highWaterMark: number }) => ReadableStream<T> {
   let reader: ReadableStreamDefaultReader<T> = null;

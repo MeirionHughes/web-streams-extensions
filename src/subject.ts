@@ -20,7 +20,7 @@ class WritableStreamEx<W = any> extends WritableStream<W>{
 
 
 export class Subject<T> implements ISubject<T>{
-  private _subscribable = new Subscribable<T>();
+  protected _subscribable = new Subscribable<T>();
   private _closingResolve: (value: unknown) => void;
   private _closing = new Promise((r) => this._closingResolve = r)
 

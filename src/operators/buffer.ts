@@ -14,7 +14,7 @@ export function buffer<T>(count: number, highWaterMark = 16): (src:ReadableStrea
         while (controller.desiredSize > 0 && reader != null) {
           let next = await reader.read();
           if(next.done){
-            if(buffer.length>0){              
+            if(buffer.length > 0 ){              
               controller.enqueue(buffer);
             }
             controller.close();            

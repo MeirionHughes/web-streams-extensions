@@ -3,8 +3,8 @@
  * buffer elements and then send an array to the reader. 
  * @param count elements to buffer before enqueue
  */
-export function take<T>(count: number, highWaterMark = 16): (src:ReadableStream<T>)=>ReadableStream<T>{ 
-  return function(src:ReadableStream<T>){
+export function take<T>(count: number, highWaterMark = 16): (src: ReadableStream<T>) => ReadableStream<T> {
+  return function (src: ReadableStream<T>) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let taken = 0;
 
@@ -12,16 +12,20 @@ export function take<T>(count: number, highWaterMark = 16): (src:ReadableStream<
       try {
         while (taken < count && controller.desiredSize > 0 && reader != null) {
           let next = await reader.read();
-          if(next.done){          
-            reader = null;                   
-          }else {
+          if (next.done) {
+            controller.close();
+            reader = null;
+          } else {
             taken += 1;
-            controller.enqueue(next.value);           
-          }          
+            controller.enqueue(next.value);
+          }
         }
-        controller.close();  
-        if(reader){ reader.cancel(); reader.releaseLock(); }
-        reader = null;  
+
+        if (taken >= count) {
+          controller.close();
+          if (reader) { reader.cancel(); reader.releaseLock(); }
+          reader = null;
+        }
 
       } catch (err) {
         controller.error(err);
@@ -36,13 +40,13 @@ export function take<T>(count: number, highWaterMark = 16): (src:ReadableStream<
       pull(controller) {
         return flush(controller);
       },
-      cancel(reason?:any) {
-        if(reader){
+      cancel(reason?: any) {
+        if (reader) {
           reader.cancel(reason);
           reader.releaseLock();
           reader = null;
         }
       }
-    }, {highWaterMark});
+    }, { highWaterMark });
   }
 }

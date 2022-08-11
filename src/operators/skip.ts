@@ -11,8 +11,10 @@ export function skip<T>(count: number, highWaterMark = 16): (src:ReadableStream<
       try {
         while (controller.desiredSize > 0 && reader != null) {
           let next = await reader.read();
-          if(next.done){          
-            reader = null;                   
+          if(next.done){
+            controller.close();             
+            reader = null;
+                          
           }else {
             if(count > 0 ){
               count -= 1;
@@ -20,10 +22,7 @@ export function skip<T>(count: number, highWaterMark = 16): (src:ReadableStream<
               controller.enqueue(next.value);     
             }      
           }          
-        }
-        controller.close();  
-        reader = null;  
-
+        }     
       } catch (err) {
         controller.error(err);
       }

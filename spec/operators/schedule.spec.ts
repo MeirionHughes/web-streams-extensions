@@ -1,9 +1,9 @@
 import { expect } from "chai";
 import { toArray, from, map, pipe, schedule } from '../../src';
-import { IScheduler } from "../../src/_scheduler";
+import { IScheduler } from "../../src";
 
 describe("schedule", () => {
-  it("", async () => {
+  it("calls scheduler per streamed chunk", async () => {
     let inputA = [1, 2, 3, 4];
     let expected = inputA;
     let wasCalled = 0;

@@ -37,7 +37,7 @@ export function from<T>(src: Promise<T> | Iterable<T> | AsyncIterable<T> | (() =
       it = iterable();
       return flush(controller);
     },
-    async pull(controller) {
+    async pull(controller) {      
       return flush(controller);
     },
     async cancel(reason?:any) {

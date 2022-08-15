@@ -9,3 +9,4 @@ export * from "./take";
 export * from "./tap";
 export * from "./through"; 
 export * from "./debounceTime";
+export * from "./schedule";

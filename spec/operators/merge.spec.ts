@@ -20,10 +20,10 @@ describe("merge", () => {
   })
   it("can merge stream of promises, sorted by resolved time", async () => {
     let input = [
-      sleep(40).then(_ => 1),
-      sleep(20).then(_ => 2),
-      sleep(30).then(_ => 3),
-      sleep(10).then(_ => 4)
+      sleep(400).then(_ => 1),
+      sleep(200).then(_ => 2),
+      sleep(300).then(_ => 3),
+      sleep(100).then(_ => 4)
     ];
     let expected = [4, 2, 3, 1];
 
@@ -68,7 +68,7 @@ describe("merge", () => {
     expect(result, "stream result matches expected").to.be.deep.eq(expected);
   })
 
-  xit("will start reading from the first stream if next element is delayed", async () => {
+  it("will start reading from the first stream if next element is delayed", async () => {
     let result = [];
     let err = null;
     try {

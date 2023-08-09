@@ -1,4 +1,6 @@
-export function from<T>(src: Promise<T> | Iterable<T> | AsyncIterable<T> | (() => Iterable<T> | AsyncIterable<T>)): ReadableStream<T> {
+import { ReadableLike, isReadableLike } from "./_readable-like";
+
+export function from<T>(src: Promise<T> | Iterable<T> | AsyncIterable<T> | (() => Iterable<T> | AsyncIterable<T>) | ReadableLike<T> ): ReadableStream<T> {
 
   let it: Iterator<T> | AsyncIterator<T>;
 
@@ -16,6 +18,10 @@ export function from<T>(src: Promise<T> | Iterable<T> | AsyncIterable<T> | (() =
     } catch (err) {
       controller.error(err);
     }
+  }
+
+  if(isReadableLike(src)){
+    return src.readable;
   }
 
   return new ReadableStream<T>({

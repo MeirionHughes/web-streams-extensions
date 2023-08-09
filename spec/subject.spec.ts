@@ -61,7 +61,7 @@ describe("subject", () => {
     let sub = new Subject<number>();
 
     let resultPromise1 = toArray(sub);
-    
+
     let reader = sub.readable.getReader();
 
     reader.cancel('foo');
@@ -158,11 +158,19 @@ describe("subject", () => {
   it("can pipeThrough", async () => {
     let input = [1, 2, 3, 4];
     let expected = input.slice();
-
     let subject = new Subject<number>();
-
     let result = await toArray(from(input).pipeThrough(subject));
 
+    expect(result).to.be.deep.eq(expected);
+  })
+
+  it("can complete without having to await the promise ", async () => {
+    let expected = [14, 2, 9, 1];
+    let src = new Subject();
+    let resultTask = toArray(src.readable);
+    for (let input of expected) src.next(input);
+    src.complete();
+    let result = await resultTask;
     expect(result).to.be.deep.eq(expected);
   })
 })

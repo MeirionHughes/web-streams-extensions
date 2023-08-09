@@ -25,12 +25,16 @@ export class Subscribable<T>{
     return Math.min(...this.subscribers.map(x => x.next(value)));
   }
   complete() {
-    this.subscribers.forEach(x => x.complete());
+    for(let sub of this.subscribers){
+      sub.complete()
+    }
     this.subscribers = [];
     this.closed = true;
   }
   error(err) {
-    this.subscribers.forEach(x => x.error(err));
+    for(let sub of this.subscribers){
+      sub.error(err);
+    }
     this.subscribers = [];
     this.closed = true;
   }

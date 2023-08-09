@@ -19,7 +19,7 @@ export function merge<T>(
     src: ReadableStream<ReadableStream<T> | Promise<T>>
   ): ReadableStream<T> {
     let outerGate = new Gate(concurrent);
-    let innerQueue = new BlockingQueue<ReadableStreamDefaultReadResult<T>>();
+    let innerQueue = new BlockingQueue<ReadableStreamReadResult<T>>();
     let subscription: SubscriptionLike;
     let errored = null;
 

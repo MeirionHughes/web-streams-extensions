@@ -1,5 +1,3 @@
-export interface ISubject<T> {
+export interface ISubject<T> extends TransformStream<T, T> {
   readonly closed: boolean;
-  readonly readable: ReadableStream<T>;
-  readonly writable: WritableStream<T>;
 }

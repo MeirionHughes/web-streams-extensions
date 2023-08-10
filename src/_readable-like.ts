@@ -1,6 +1,6 @@
 
 export interface ReadableLike<T = any> {
-    readable: ReadableStream<T>;
+    readonly readable: ReadableStream<T>;
 }
 
 export function isReadableLike<T>(obj: object): obj is ReadableLike {

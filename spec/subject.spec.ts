@@ -173,4 +173,27 @@ describe("subject", () => {
     let result = await resultTask;
     expect(result).to.be.deep.eq(expected);
   })
+
+  it("will error writable reason if writable is aborted", async ()=>{
+    let subjectA = new Subject<number>()
+    let subjectB = new Subject<number>();
+
+    subjectA.readable.pipeTo(subjectB.writable);
+
+    let result = toArray(subjectB.readable);
+    let error = null;
+
+    subjectB.writable.abort("foobar");
+
+    try{
+      await result;      
+    }
+    catch(err){
+      error = err;
+    }
+
+    expect(error).to.not.be.null;
+    expect(error).to.equal("foobar");
+    expect(subjectB.closed).to.be.true;
+  })
 })

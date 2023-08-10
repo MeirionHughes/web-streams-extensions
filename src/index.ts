@@ -16,6 +16,7 @@ export * from "./to-array";
 export * from "./to-promise";
 export * from "./to-string";
 export * from "./zip";
+export * from "./of";
 
 export * from "./subject";
 export * from "./subscribe";

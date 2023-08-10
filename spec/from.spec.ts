@@ -109,5 +109,4 @@ describe("from", () => {
     expect(result).to.be.deep.eq(expected);
 
   })
-
 })

@@ -65,6 +65,10 @@ export class Subject<T> implements ISubject<T>{
       this._closing,
       {
         write(chunk, controller) {
+          if(controller.signal.aborted){
+            self._error(controller.signal.reason);
+            return;
+          }
           self._next(chunk);
         },
         close() {

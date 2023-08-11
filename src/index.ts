@@ -19,6 +19,7 @@ export * from "./zip.js";
 export * from "./of.js";
 
 export * from "./subject.js";
+export * from "./behaviour_subject.js"
 export * from "./subscribe.js";
 
 

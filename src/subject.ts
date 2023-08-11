@@ -1,6 +1,6 @@
 import { ISubject } from "./_subject.js";
 import { Subscribable } from "./_subscribable.js";
-import { SubscriptionLike } from "./_subscription.js";
+import { Subscriber, SubscriptionLike } from "./_subscription.js";
 
 
 class WritableStreamEx<W = any> extends WritableStream<W>{
@@ -35,9 +35,9 @@ export class Subject<T> implements ISubject<T>{
     let cancelled = false;
     return new ReadableStream({
       async start(controller) {
-        subscription = self._subscribable.subscribe({
+        subscription = self.subscribe({
           next: (value: T) => {
-            if (cancelled) return;;
+            if (cancelled) return;
             controller.enqueue(value);
             return controller.desiredSize;
           },
@@ -80,15 +80,20 @@ export class Subject<T> implements ISubject<T>{
       }, queuingStrategy);
   }
 
-  private _next(value: T): number {
+  subscribe(cb: Subscriber<T>): SubscriptionLike {
+    let subscription = this._subscribable.subscribe(cb);
+    return subscription;
+  }
+
+  protected _next(value: T): number {
     return this._subscribable.next(value);
   }
 
-  private _complete() {
+  protected _complete() {
     this._subscribable.complete();
   }
 
-  private _error(err: any) {
+  protected _error(err: any) {
     this._subscribable.error(err);
   }
 

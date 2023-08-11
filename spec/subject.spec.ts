@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, pipe, map, take, toPromise, from, tap } from '../src/index.js';
+import { toArray, pipe, map, take, toPromise, from, tap, first } from '../src/index.js';
 import { Subject } from "../src/subject.js";
 
 describe("subject", () => {
@@ -195,5 +195,17 @@ describe("subject", () => {
     expect(error).to.not.be.null;
     expect(error).to.equal("foobar");
     expect(subjectB.closed).to.be.true;
+  })
+
+  it("is not required to close subject for readers to complete", async ()=>{
+    let subjectA = new Subject<number>();
+    let input = 10;
+    let task = toPromise(pipe(subjectA, first()));
+
+    subjectA.next(input);
+
+    let result = await task;
+
+    expect(result).to.be.equal(input)    
   })
 })

@@ -1,17 +1,17 @@
 {
   "name": "web-streams-extensions",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "helper methods to create, pipe and map webstreams",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
   "main": "./dist/cjs/index.js",
-  "exports": {    
+  "exports": {
     ".": {
-      "import":  "./dist/esm/index.js",
+      "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js"
     },
     "./operators": {
-      "import":  "./dist/esm/operators/index.js",
+      "import": "./dist/esm/operators/index.js",
       "require": "./dist/cjs/operators/index.js"
     }
   },

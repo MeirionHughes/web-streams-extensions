@@ -1,4 +1,4 @@
-import { IScheduler } from "../_scheduler";
+import { IScheduler } from "../_scheduler.js";
 
 export class IdleScheduler implements IScheduler {
   async nextTick() {

@@ -1,8 +1,8 @@
 import { expect } from "chai";
-import { toArray, from, map, pipe, toPromise } from '../../src';
-import { merge } from "../../src/operators/merge";
-import { tap } from "../../src/operators/tap";
-import { sleep } from "../../src/utils/sleep";
+import { toArray, from, map, pipe, toPromise } from '../../src/index.js';
+import { merge } from "../../src/operators/merge.js";
+import { tap } from "../../src/operators/tap.js";
+import { sleep } from "../../src/utils/sleep.js";
 
 describe("merge", () => {
   it("can merge stream of promises, resolved", async () => {

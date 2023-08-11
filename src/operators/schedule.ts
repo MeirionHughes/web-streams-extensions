@@ -1,4 +1,4 @@
-import { IScheduler } from "../_scheduler";
+import { IScheduler } from "../_scheduler.js";
 
 /**
  * schedule enqueuing stream chunks via a scheduler. 

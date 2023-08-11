@@ -1,4 +1,4 @@
-import { isReadableLike, ReadableLike } from "./_readable-like";
+import { isReadableLike, ReadableLike } from "./_readable-like.js";
 
 /** return a promise that resolves once the stream is exhausted. 
  * @returns last value;

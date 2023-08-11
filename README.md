@@ -5,13 +5,11 @@ Being built on-top of ReadableStream we can have a reactive-pipeline with non-bl
 
 requires support for ReadableStream [use a polyfill if they're not available](https://www.npmjs.com/package/web-streams-polyfill)
 
-Subjects require support for WritableStream
-
-requires support for async / await
+Subjects require support for WritableStream. Requires support for async / await.
 
 ## Creation
 
-### from<T>(src: Iterable<T> | AsyncIterable<T> | (()=>Iterable<T> | AsyncIterable<T>)): ReadableStream<T>
+### from<T>(src: Iterable<T> | AsyncIterable<T> | (()=>Iterable<T> | AsyncIterable<T>) | ReadableLike<T>): ReadableStream<T>
 
 turns an iterable source into a readable stream. 
 
@@ -23,6 +21,12 @@ from(function*(){yield 1, yield 2, yield 3, yield 4};
 from(async function*(){yield 1, yield 2, yield 3, await Promise.resolve(4)};
 ```
 
+### of<T>(...args:T[]): ReadableStream<T>
+creates a ReadableStream where the chunks will be the in-order arguments passed to it
+
+```ts
+of(1, "foo", ()=>"bar", {})
+```
 ### concat<T>(...streams: ReadableStream<T>[]): ReadableStream<T>
 concatenates several streams together in the order given.
 
@@ -213,6 +217,11 @@ let result = []
 let stream = tap(x=>result.push(x))(from(input));
 let result = await toPromise(stream); //execute
 ```
+
+### timeout<T>(duration: number): Op<T, T>
+
+throws an error if the duration between chunks exceeds the duration (milliseconds)
+
 
 ## Subjects
 

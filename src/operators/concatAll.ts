@@ -1,4 +1,4 @@
-import { isReadableStream } from "../utils/is-readable";
+import { isReadableStream } from "../utils/is-readable.js";
 
 export function concatAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise<T> | ArrayLike<T>>) => ReadableStream<T> {
   return function (src: ReadableStream<ReadableStream<T>>) {

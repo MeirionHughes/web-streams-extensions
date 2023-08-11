@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, concat, filter, from, zip, buffer } from '../src';
+import { toArray, concat, filter, from, zip, buffer } from '../src/index.js';
 
 describe("steams", () => {
   it("can concat streams", async () => {

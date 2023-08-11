@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from, pipe, take, skip, concat, concatAll, toPromise, Subject } from '../src';
+import { toArray, from, pipe, toPromise, Subject } from '../src/index.js';
 
 describe("from", () => {
   it("can create stream from array", async () => {

@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { from,toString } from '../src';
+import { from,toString } from '../src/index.js';
 
 describe("toString", () => {
   it("can combine chunks into a string", async () => {

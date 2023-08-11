@@ -1,5 +1,6 @@
-import { isReadableLike, ReadableLike, through } from ".";
-import { Op } from "./_op";
+import { isReadableLike, ReadableLike } from "./_readable-like.js";
+import { through } from "./operators/through.js";
+import { Op } from "./_op.js";
 
 type ReadableSource<T> = ReadableLike<T> | ReadableStream<T>
 

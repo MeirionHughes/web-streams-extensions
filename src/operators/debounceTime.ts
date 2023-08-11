@@ -1,5 +1,3 @@
-import { read } from "fs";
-
 /**
  * buffer elements until a duration of time has past since the last chunk.
  * @param count elements to buffer before enqueue

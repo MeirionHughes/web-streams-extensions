@@ -1,14 +1,13 @@
-import { from } from "../from";
-import { pipe } from "../pipe";
-import { subscribe } from "../subscribe";
-import { BlockingQueue, Gate, Signal } from "../utils/signal";
-import { map } from "./map";
-import { mapSync } from "./mapSync";
-import { schedule } from "./schedule";
-import { on } from "./on";
-import { SubscriptionLike } from "../_subscription";
-import { toPromise } from "../to-promise";
-import { toArray } from "../to-array";
+import { from } from "../from.js";
+import { pipe } from "../pipe.js";
+import { BlockingQueue, Gate } from "../utils/signal.js";
+import { map } from "./map.js";
+import { mapSync } from "./mapSync.js";
+import { schedule } from "./schedule.js";
+import { on } from "./on.js";
+import { SubscriptionLike } from "../_subscription.js";
+import { toPromise } from "../to-promise.js";
+import { toArray } from "../to-array.js";
 
 export function merge<T>(
   concurrent: number = Infinity

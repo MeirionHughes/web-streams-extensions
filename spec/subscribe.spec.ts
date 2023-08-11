@@ -1,6 +1,6 @@
 import { expect } from "chai";
-import { toArray, from, Subject } from '../src';
-import { subscribe } from "../src/subscribe";
+import { toArray, from, Subject } from '../src/index.js';
+import { subscribe } from "../src/subscribe.js";
 
 describe("subscribe", () => {
   it("can subscribe and consume a stream", async () => {

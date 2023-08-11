@@ -1,6 +1,6 @@
-import { ISubject } from "./_subject";
-import { Subscribable } from "./_subscribable";
-import { SubscriptionLike } from "./_subscription";
+import { ISubject } from "./_subject.js";
+import { Subscribable } from "./_subscribable.js";
+import { SubscriptionLike } from "./_subscription.js";
 
 
 class WritableStreamEx<W = any> extends WritableStream<W>{

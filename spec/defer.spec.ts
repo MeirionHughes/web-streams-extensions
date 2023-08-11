@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from, defer } from '../src';
+import { toArray, from, defer } from '../src/index.js';
 
 describe("defer", () => {
   it("can defer stream behind promise", async () => {

@@ -1,25 +1,25 @@
-export * from "./operators";
-export * from "./schedulers";
+export * from "./operators/index.js";
+export * from "./schedulers/index.js";
 
-export * from './_op';
-export * from './_subject';
-export * from './_subscription';
-export * from './_readable-like';
-export * from './_scheduler';
+export * from './_op.js';
+export * from './_subject.js';
+export * from './_subscription.js';
+export * from './_readable-like.js';
+export * from './_scheduler.js';
 
-export * from "./concat";
-export * from "./defer";
-export * from "./from";
-export * from "./join";
-export * from "./pipe";
-export * from "./to-array";
-export * from "./to-promise";
-export * from "./to-string";
-export * from "./zip";
-export * from "./of";
+export * from "./concat.js";
+export * from "./defer.js";
+export * from "./from.js";
+export * from "./join.js";
+export * from "./pipe.js";
+export * from "./to-array.js";
+export * from "./to-promise.js";
+export * from "./to-string.js";
+export * from "./zip.js";
+export * from "./of.js";
 
-export * from "./subject";
-export * from "./subscribe";
+export * from "./subject.js";
+export * from "./subscribe.js";
 
 
 

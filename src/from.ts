@@ -1,4 +1,4 @@
-import { ReadableLike, isReadableLike } from "./_readable-like";
+import { ReadableLike, isReadableLike } from "./_readable-like.js";
 
 export function from<T>(src: Promise<T> | Iterable<T> | AsyncIterable<T> | (() => Iterable<T> | AsyncIterable<T>) | ReadableLike<T> ): ReadableStream<T> {
 

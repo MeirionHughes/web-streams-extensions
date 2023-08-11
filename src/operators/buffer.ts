@@ -1,5 +1,3 @@
-import { read } from "fs";
-
 /**
  * buffer elements and then send an array to the reader. 
  * @param count elements to buffer before enqueue

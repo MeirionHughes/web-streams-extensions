@@ -1,6 +1,6 @@
 import { expect } from "chai";
-import { toArray, concat, pipe, tap, from, through } from '../../src';
-import { sleep } from "../../src/utils/sleep";
+import { toArray, concat, pipe, tap, from, through } from '../../src/index.js';
+import { sleep } from "../../src/utils/sleep.js";
 
 describe("streams", () => {
   it("writable can buffer until read from using watermark", async () => {

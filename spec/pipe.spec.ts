@@ -1,6 +1,6 @@
 import { expect } from "chai";
-import { Subject } from "../src";
-import { toArray, from, pipe, filter, buffer, map, first, toPromise } from '../src';
+import { Subject } from "../src/index.js";
+import { toArray, from, pipe, filter, buffer, map, first, toPromise } from '../src/index.js';
 
 describe("pipe", () => {
   it("can pipe multiple operators", async () => {

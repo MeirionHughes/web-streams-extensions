@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from, pipe, buffer, concatAll } from '../../src';
+import { toArray, from, pipe, buffer, concatAll } from '../../src/index.js';
 
 describe("concat operator", () => {
 

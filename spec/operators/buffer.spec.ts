@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from, pipe,  buffer } from '../../src';
+import { toArray, from, pipe,  buffer } from '../../src/index.js';
 
 describe("buffer", () => {
   it("can buffer T ", async () => {

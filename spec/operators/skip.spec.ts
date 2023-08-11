@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from, pipe, skip } from '../../src';
+import { toArray, from, pipe, skip } from '../../src/index.js';
 
 describe("skip", () => {
   it("can skip less than total ", async () => {

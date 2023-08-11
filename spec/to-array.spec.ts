@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from } from '../src';
+import { toArray, from } from '../src/index.js';
 
 describe("to-array", () => {
   it("can create array from stream", async () => {

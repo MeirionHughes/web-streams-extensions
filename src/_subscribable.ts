@@ -1,4 +1,4 @@
-import { Subscriber, SubscriptionLike } from "./_subscription";
+import { Subscriber, SubscriptionLike } from "./_subscription.js";
 
 export class Subscribable<T>{
   closed: boolean = false;

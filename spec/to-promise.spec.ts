@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from, toPromise } from '../src';
+import { toArray, from, toPromise } from '../src/index.js';
 
 describe("to-promise", () => {
   it("can await a stream and take the last element", async () => {

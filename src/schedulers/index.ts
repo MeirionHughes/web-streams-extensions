@@ -1,1 +1,1 @@
-export * from './idle-scheduler';
+export * from './idle-scheduler.js';

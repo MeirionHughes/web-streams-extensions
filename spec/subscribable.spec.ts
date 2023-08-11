@@ -1,7 +1,7 @@
 import { expect } from "chai";
-import { toArray, pipe, map, take, toPromise, from } from '../src';
-import { Subject } from "../src/subject";
-import { Subscribable } from "../src/_subscribable";
+import { toArray, pipe, map, take, toPromise, from } from '../src/index.js';
+import { Subject } from "../src/subject.js";
+import { Subscribable } from "../src/_subscribable.js";
 
 describe("subscribable", () => {
   it("disposing a subscriber doesn't end the whole subscribable ", async () => {

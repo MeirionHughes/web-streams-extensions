@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from, pipe, buffer, take } from '../../src';
+import { toArray, from, pipe, buffer, take } from '../../src/index.js';
 
 describe("take", () => {
   it("can take less than input ", async () => {

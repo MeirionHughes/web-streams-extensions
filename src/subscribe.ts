@@ -1,5 +1,5 @@
-import { isReadableLike, ReadableLike } from ".";
-import { SubscriptionLike } from "./_subscription";
+import { isReadableLike, ReadableLike } from "./_readable-like.js";
+import { SubscriptionLike } from "./_subscription.js";
 
 /**  */
 export function subscribe<T>(

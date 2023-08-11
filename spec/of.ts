@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from, of } from '../src';
+import { toArray, from, of } from '../src/index.js';
 
 describe("of", () => {
   it("can create stream of the given elements ", async () => {

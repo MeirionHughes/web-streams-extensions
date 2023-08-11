@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from, map, pipe } from '../../src';
+import { toArray, from, map, pipe } from '../../src/index.js';
 
 describe("map", () => {
   it("can map T ", async () => {

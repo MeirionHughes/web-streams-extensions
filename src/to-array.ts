@@ -1,4 +1,4 @@
-import { isReadableLike, ReadableLike } from "./_readable-like";
+import { isReadableLike, ReadableLike } from "./_readable-like.js";
 
 export async function toArray<T>(src: ReadableLike<T>): Promise<T[]>
 export async function toArray<T>(src: ReadableStream<T>): Promise<T[]>

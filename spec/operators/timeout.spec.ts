@@ -1,6 +1,6 @@
 import { expect } from "chai";
-import { sleep } from "../../src/utils/sleep";
-import { toArray, from, pipe,  buffer, take, debounceTime, tap, timeout } from '../../src';
+import { sleep } from "../../src/utils/sleep.js";
+import { toArray, from, pipe,  buffer, take, debounceTime, tap, timeout } from '../../src/index.js';
 
 
 describe("timeout", () => {

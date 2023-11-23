@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { toArray, pipe, map, take, toPromise, from, tap, first } from '../src/index.js';
 import { Subject } from "../src/subject.js";
+import { sleep } from '../src/utils/sleep.js';
 
 describe("subject", () => {
   it("can observe with multiple readers - manual write", async () => {
@@ -73,7 +74,6 @@ describe("subject", () => {
 
     let result1 = await resultPromise1;
 
-
     expect(result1).to.be.deep.eq(expected1);
   })
 
@@ -97,6 +97,32 @@ describe("subject", () => {
 
     expect(result).to.be.deep.eq([1]);
     expect(result2).to.be.deep.eq([1, 2]);
+  })  
+  
+  it("completing a subject stops pipe through and preceding pipes", async () => {
+    let src = new Subject();
+    let subject = new Subject();
+    let pulled = [];
+
+    pipe(src.readable, tap(x=>{
+      pulled.push(x);   
+    })).pipeTo(subject.writable);
+
+    let outputTask = toArray(subject.readable);
+
+    await src.next(1);
+    await sleep(1);
+    await subject.complete();
+    for(let i=2; i< 20; i++){
+      src.next(i);
+    }
+    await src.complete();
+    await sleep(1);
+
+    let result = await outputTask;
+
+    expect(result).to.be.deep.eq([1]);
+    expect(pulled).to.be.deep.eq([1,2,3]);//pulled 2 more (highwater) before being aborted by writer controller
   })
 
 
@@ -108,6 +134,7 @@ describe("subject", () => {
     let result = await toArray(subject.readable);
 
     expect(result).to.be.deep.eq([1, 2, 3, 4]);
+    expect(subject.closed).to.be.true;
   })
 
   it("erroring a writable errors the subscribers", async () => {
@@ -130,7 +157,6 @@ describe("subject", () => {
 
     expect(result).to.be.eq('foo');
   })
-
 
   it("can pipeTo", async () => {
     let input = [1, 2, 3, 4];

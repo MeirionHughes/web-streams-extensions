@@ -2,23 +2,6 @@ import { ISubject } from "./_subject.js";
 import { Subscribable } from "./_subscribable.js";
 import { Subscriber, SubscriptionLike } from "./_subscription.js";
 
-
-class WritableStreamEx<W = any> extends WritableStream<W>{
-  constructor(private _closed: Promise<unknown>, underlyingSink?: UnderlyingSink<W>, strategy?: QueuingStrategy<W>) {
-    super(underlyingSink, strategy);
-  }
-
-  getWriter(): WritableStreamDefaultWriter<W> {
-    const writer = new WritableStreamDefaultWriter(this);
-    this._closed.then(async x => {
-      await writer.close();
-      await writer.releaseLock();
-    })
-    return writer;
-  }
-}
-
-
 export class Subject<T> implements ISubject<T>{
   protected _subscribable = new Subscribable<T>();
   private _closingResolve: (value: unknown) => void;
@@ -61,11 +44,14 @@ export class Subject<T> implements ISubject<T>{
   get writable() {
     const queuingStrategy = new CountQueuingStrategy({ highWaterMark: 1 });
     const self = this;
-    return new WritableStreamEx(
-      this._closing,
+    let stream = new WritableStream(
       {
         write(chunk, controller) {
-          if(controller.signal.aborted){
+          if (self.closed && controller.signal.aborted == false) {
+            controller.error();
+            return;
+          }
+          if (controller.signal.aborted) {
             self._error(controller.signal.reason);
             return;
           }
@@ -78,6 +64,12 @@ export class Subject<T> implements ISubject<T>{
           self._error(reason);
         }
       }, queuingStrategy);
+    this._closing.then(_ => {
+      if (stream.locked == false) {
+        stream.close();
+      } else stream.abort();
+    })
+    return stream;
   }
 
   subscribe(cb: Subscriber<T>): SubscriptionLike {

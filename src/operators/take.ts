@@ -23,7 +23,10 @@ export function take<T>(count: number, highWaterMark = 16): (src: ReadableStream
 
         if (taken >= count) {
           controller.close();
-          if (reader) { reader.cancel(); reader.releaseLock(); }
+          if (reader) { 
+            reader.cancel(); 
+            reader.releaseLock(); 
+          }
           reader = null;
         }
 

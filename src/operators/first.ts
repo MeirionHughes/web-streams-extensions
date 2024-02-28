@@ -14,8 +14,8 @@ export function first<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableSt
 
           if(selector(next.value)){
             controller.enqueue(next.value);
-            controller.close();
-            src.cancel();
+            controller.close();    
+            reader.cancel();        
             reader.releaseLock();
             reader = null;
             return;

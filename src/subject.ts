@@ -45,7 +45,7 @@ export class Subject<T> implements ISubject<T>{
     const queuingStrategy = new CountQueuingStrategy({ highWaterMark: 1 });
     const self = this;
     let stream = new WritableStream(
-      {
+      {       
         write(chunk, controller) {
           if (self.closed && controller.signal.aborted == false) {
             controller.error();
@@ -67,7 +67,7 @@ export class Subject<T> implements ISubject<T>{
     this._closing.then(_ => {
       if (stream.locked == false) {
         stream.close();
-      } else stream.abort();
+      }
     })
     return stream;
   }

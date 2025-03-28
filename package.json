@@ -1,6 +1,6 @@
 {
   "name": "web-streams-extensions",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "helper methods to create, pipe and map webstreams",
   "type": "module",
   "types": "./dist/esm/index.d.ts",

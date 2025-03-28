@@ -7,6 +7,11 @@ export class Subject<T> implements ISubject<T>{
   private _closingResolve: (value: unknown) => void;
   private _closing = new Promise((r) => this._closingResolve = r)
 
+  constructor(){
+    const self = this;
+    this._closing = new Promise(function(r) {self._closingResolve = r});
+  }
+
   get closed() {
     return this._subscribable.closed;
   }

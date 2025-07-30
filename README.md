@@ -196,6 +196,15 @@ let result = await toPromise(stream);
 
 ### last<T>(predicate?:(chunk:T)=>boolean): Op<T, T>
 
+returns a stream of one chunk, the last to return true when passed to the selector, or simply the last chunk if no predicate is supplied
+
+```ts
+let input = [1,2,3,4];
+let expected = 3;
+let stream = last(x=>x<=3)(from(input));
+let result = await toPromise(stream);
+```
+
 ### map<T, R>(select: (chunk: T) => R | Promise<R>): Op<T, R>
 
 Maps each value in a stream through a selector function. Values where the selector returns undefined are filtered out.

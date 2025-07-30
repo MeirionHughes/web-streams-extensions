@@ -354,7 +354,7 @@ const evenNumbers = await reader1; // [2, 4]
 const doubled = await reader2;     // [2, 4, 6, 8]
 ```
 
-**Piping to a subject:**
+**pipeTo to a subject:**
 
 ```ts
 const source = from([1, 2, 3, 4]);
@@ -366,6 +366,17 @@ source.pipeTo(subject.writable);
 // Read from subject
 const result = await toArray(subject.readable);
 console.log(result); // [1, 2, 3, 4]
+```
+
+**pipeThrough` the subject:**
+
+```ts
+let input = [1, 2, 3, 4];
+let subject = new Subject<number>();
+
+let result = await toArray(from(input).pipeThrough(subject));
+
+expect(result).to.be.deep.eq(expected); // [1,2,3,4]
 ```
 
 ### BehaviourSubject<T>
@@ -427,46 +438,6 @@ For older browsers, use the [web-streams-polyfill](https://www.npmjs.com/package
 import 'web-streams-polyfill/polyfill';
 import { from, pipe, map } from 'web-streams-extensions';
 ```
-
-
-```ts
-let input = [1, 2, 3, 4];
-let subject = new Subject<number>();
-
-let resultPromise = toArray(subject.readable);
-
-from(input).pipeTo(subject.writable);
-
-let result = await resultPromise;//[1,2,3,4]
-```
-
-or `pipeThrough` the subject: 
-
-```ts
-let input = [1, 2, 3, 4];
-let subject = new Subject<number>();
-
-let result = await toArray(from(input).pipeThrough(subject));
-
-expect(result).to.be.deep.eq(expected); // [1,2,3,4]
-```
-
-or manually call `next`, `complete`, `error`
-
-```ts
-let subject = new Subject<number>();
-let resultPromise = toArray(subject.readable);
-
-subject.next(1);
-subject.next(2);
-subject.next(3);
-subject.next(4);
-subject.complete();
-
-let result = await resultPromise; // [1,2,3,4]
-```
-
-although mixing these approaches is not advised - unpredictable behavior. 
 
 
 

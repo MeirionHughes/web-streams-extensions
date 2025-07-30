@@ -180,8 +180,7 @@ let input = [1, 2, 3, 4];
 let expected = [1, 2, 4];
 let stream = pipe(from(input), filter(x => x != 3));
 let result = await toArray(stream);
-```
-let result = await toArray(stream);
+
 ```
 
 ### first<T>(predicate?:(chunk:T)=>boolean): Op<T, T>
@@ -287,8 +286,6 @@ let stream = pipe(
   tap(x => sideEffects.push(x))
 );
 let result = await toArray(stream);
-```
-let result = await toPromise(stream); //execute
 ```
 
 ### timeout<T>(duration: number): Op<T, T>

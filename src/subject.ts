@@ -2,10 +2,15 @@ import { ISubject } from "./_subject.js";
 import { Subscribable } from "./_subscribable.js";
 import { Subscriber, SubscriptionLike } from "./_subscription.js";
 
-export class Subject<T> implements ISubject<T>{
+export class Subject<T> implements ISubject<T> {
   protected _subscribable = new Subscribable<T>();
   private _closingResolve: (value: unknown) => void;
-  private _closing = new Promise((r) => this._closingResolve = r)
+  private _closing: Promise<void>;
+
+  constructor() {
+    const self = this;
+    this._closing = new Promise(function (r) { self._closingResolve = r });
+  }
 
   constructor(){
     const self = this;
@@ -50,7 +55,7 @@ export class Subject<T> implements ISubject<T>{
     const queuingStrategy = new CountQueuingStrategy({ highWaterMark: 1 });
     const self = this;
     let stream = new WritableStream(
-      {       
+      {
         write(chunk, controller) {
           if (self.closed && controller.signal.aborted == false) {
             controller.error();

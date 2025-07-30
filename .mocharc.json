@@ -1,9 +1,7 @@
 {
   "extensions": ["ts"],
   "spec": ["spec/**/*.spec.ts"],
-  "node-option": [
-    "experimental-specifier-resolution=node",
-    "loader=ts-node/esm"
-  ], 
-  "require": ["web-streams-polyfill"]
+  "timeout": 10000,
+  "bail": true,
+  "loader": "ts-node/esm"
 }

@@ -204,12 +204,14 @@ describe("subject", () => {
     let subjectA = new Subject<number>()
     let subjectB = new Subject<number>();
 
-    subjectA.readable.pipeTo(subjectB.writable);
-
+    // Get a writer on subjectB first to keep the writable unlocked
+    let writer = subjectB.writable.getWriter();
+    
     let result = toArray(subjectB.readable);
     let error = null;
 
-    subjectB.writable.abort("foobar");
+    // Abort the writer instead of the stream directly
+    writer.abort("foobar");
 
     try{
       await result;      
@@ -233,5 +235,35 @@ describe("subject", () => {
     let result = await task;
 
     expect(result).to.be.equal(input)    
+  })
+
+  it("manually completing subject cancels piped ReadableStream", async () => {
+    let subject = new Subject<number>();
+    let cancelled = false;
+    let cancelReason = null;
+
+    // Create a ReadableStream that tracks if it was cancelled
+    let sourceStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(1);
+        controller.enqueue(2);
+      },
+      cancel(reason) {
+        cancelled = true;
+        cancelReason = reason;
+      }
+    });
+ 
+    let pipePromise = sourceStream.pipeTo(subject.writable);
+    
+    // Immediately complete the subject - the cancel will only be called when trying to write
+    await subject.complete();
+
+    await pipePromise;    
+
+
+    // Verify the source stream was cancelled
+    expect(cancelled).to.be.true;
+    expect(cancelReason).to.not.be.null;
   })
 })

@@ -1,9 +1,26 @@
 
 /**
- * buffer elements and then send an array to the reader. 
- * @param count elements to buffer before enqueue
+ * Takes only the first `count` elements from the source stream.
+ * After emitting the specified number of elements, the stream completes and the source is cancelled.
+ * 
+ * @template T The type of elements in the stream
+ * @param count The number of elements to take
+ * @param highWaterMark The high water mark for the output stream
+ * @returns A stream operator that limits the number of elements
+ * 
+ * @example
+ * ```typescript
+ * let input = [1, 2, 3, 4, 5];
+ * let expected = [1, 2, 3];
+ * let stream = pipe(from(input), take(3));
+ * let result = await toArray(stream);
+ * ```
  */
 export function take<T>(count: number, highWaterMark = 16): (src: ReadableStream<T>) => ReadableStream<T> {
+  if (count < 0) {
+    throw new Error("Take count must be non-negative");
+  }
+  
   return function (src: ReadableStream<T>) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let taken = 0;
@@ -14,29 +31,48 @@ export function take<T>(count: number, highWaterMark = 16): (src: ReadableStream
           let next = await reader.read();
           if (next.done) {
             controller.close();
+            reader.releaseLock();
             reader = null;
           } else {
             taken += 1;
             controller.enqueue(next.value);
+            
+            // If we've taken enough, close the stream
+            if (taken >= count) {
+              controller.close();
+              if (reader) { 
+                try {
+                  reader.cancel();
+                  reader.releaseLock();
+                } catch (err) {
+                  // Ignore cleanup errors
+                }
+              }
+              reader = null;
+              return;
+            }
           }
         }
-
-        if (taken >= count) {
-          controller.close();
-          if (reader) { 
-            reader.cancel(); 
-            reader.releaseLock(); 
+      } catch (err) {
+        controller.error(err);
+        if (reader) {
+          try {
+            reader.cancel(err);
+            reader.releaseLock();
+          } catch (e) {
+            // Ignore cleanup errors
           }
           reader = null;
         }
-
-      } catch (err) {
-        controller.error(err);
       }
     }
 
     return new ReadableStream<T>({
       start(controller) {
+        if (count === 0) {
+          controller.close();
+          return;
+        }
         reader = src.getReader();
         return flush(controller);
       },
@@ -45,9 +81,14 @@ export function take<T>(count: number, highWaterMark = 16): (src: ReadableStream
       },
       cancel(reason?: any) {
         if (reader) {
-          reader.cancel(reason);
-          reader.releaseLock();
-          reader = null;
+          try {
+            reader.cancel(reason);
+            reader.releaseLock();
+          } catch (err) {
+            // Ignore cleanup errors
+          } finally {
+            reader = null;
+          }
         }
       }
     }, { highWaterMark });

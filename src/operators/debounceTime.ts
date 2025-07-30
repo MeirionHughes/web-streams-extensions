@@ -1,49 +1,99 @@
 /**
- * buffer elements until a duration of time has past since the last chunk.
- * @param count elements to buffer before enqueue
+ * Buffers elements until a duration of time has passed since the last chunk.
+ * Only emits the buffered elements after the specified duration of silence.
+ * Useful for batching rapid sequences of values.
+ * 
+ * @template T The type of elements to buffer
+ * @param duration Duration in milliseconds to wait after the last chunk
+ * @param highWaterMark The high water mark for the output stream
+ * @returns A stream operator that debounces elements by time
+ * 
+ * @example
+ * ```typescript
+ * let stream = pipe(
+ *   from(rapidValueStream),
+ *   debounceTime(1000) // Wait 1 second after last value
+ * );
+ * ```
  */
 export function debounceTime<T>(duration: number, highWaterMark = 16): (src: ReadableStream<T>) => ReadableStream<T[]> {
+  if (duration <= 0) {
+    throw new Error("Debounce duration must be positive");
+  }
+  
   return function (src: ReadableStream<T>) {
     let reader: ReadableStreamDefaultReader<T> = null;
-    let buffer = [];
-    let timer = null;
+    let buffer: T[] = [];
+    let timer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
+
+    function clearTimer() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    }
+
+    function emitBuffer(controller: ReadableStreamDefaultController<T[]>) {
+      if (buffer.length > 0 && !cancelled) {
+        try {
+          controller.enqueue(buffer);
+          buffer = [];
+        } catch (err) {
+          // Controller might be closed, ignore
+        }
+      }
+    }
 
     async function pull(controller: ReadableStreamDefaultController<T[]>) {
       try {
-        while (reader != null) {
+        while (reader != null && !cancelled) {
           let next = await reader.read();
           if (next.done) {
-            if (timer == null) {
-              controller.close();
-            }
+            clearTimer();
+            // Emit final buffer if it has elements
+            emitBuffer(controller);
+            controller.close();
+            reader.releaseLock();
             reader = null;
+            return;
           } else {
             buffer.push(next.value);
 
-            if (timer != null) {
-              clearTimeout(timer);
-            }
-
+            // Clear existing timer and set new one
+            clearTimer();
             timer = setTimeout(() => {
               timer = null;
-              if (cancelled !== true) {
-                controller.enqueue(buffer);
-
+              if (!cancelled) {
+                emitBuffer(controller);
+                
+                // If reader is done, close the stream
                 if (reader == null) {
-                  controller.close();
+                  try {
+                    controller.close();
+                  } catch (err) {
+                    // Controller might already be closed
+                  }
                 }
               }
-
-              buffer = [];
             }, duration);
           }
         }
       } catch (err) {
+        clearTimer();
         controller.error(err);
-        reader.cancel(err);
+        if (reader) {
+          try {
+            reader.cancel(err);
+            reader.releaseLock();
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+          reader = null;
+        }
       }
     }
+
     return new ReadableStream<T[]>({
       start(controller) {
         reader = src.getReader();
@@ -53,15 +103,17 @@ export function debounceTime<T>(duration: number, highWaterMark = 16): (src: Rea
         return pull(controller);
       },
       cancel(reason?: any) {
-        if (reader) {
-          reader.cancel(reason);
-          reader.releaseLock();
-          reader = null;
-        }
         cancelled = true;
-        if (timer) {
-          clearTimeout(timer);
-          timer = null;
+        clearTimer();
+        if (reader) {
+          try {
+            reader.cancel(reason);
+            reader.releaseLock();
+          } catch (err) {
+            // Ignore cleanup errors
+          } finally {
+            reader = null;
+          }
         }
       }
     }, { highWaterMark });

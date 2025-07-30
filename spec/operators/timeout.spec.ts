@@ -13,7 +13,7 @@ describe("timeout", () => {
 
   it("will error if time between chunks exceeds duration", async () => {
     let input = async function*(){yield 1, yield 2, await sleep(150), yield 3};
-    let error = null;
+    let error: Error = null;
     let result = null;
     try {
        result = await toArray(pipe(from(input), timeout(100)));
@@ -22,6 +22,6 @@ describe("timeout", () => {
     }
     expect(error).to.not.be.null;
     expect(result).to.be.null;
-    expect(error).to.be.eq("timeout");
+    expect(error.message.search("Stream timeout")).to.be.greaterThanOrEqual(0);
   })
 });

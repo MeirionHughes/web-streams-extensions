@@ -1,9 +1,30 @@
 import { map } from "./map.js";
 
+/**
+ * Filters values in a stream based on a predicate function.
+ * Only values that pass the predicate test are emitted by the resulting stream.
+ * 
+ * @template T The input type
+ * @template S The narrowed output type (for type guard predicates)
+ * @param predicate A function that tests each value
+ * @returns A stream operator that filters values
+ * 
+ * @example
+ * ```typescript
+ * pipe(
+ *   from([1, 2, 3, 4, 5, 6]),
+ *   filter(x => x % 2 === 0)
+ * )
+ * // Emits: 2, 4, 6
+ * ```
+ */
 export function filter<T, S extends T>(predicate: (chunk: T) => chunk is S): (src: ReadableStream<T>) => ReadableStream<S> 
 export function filter<T>(predicate: (chunk: T) => boolean): (src: ReadableStream<T>) => ReadableStream<T>
 export function filter<T>(predicate: (chunk: T) => boolean): (src: ReadableStream<T>) => ReadableStream<T> {
   return function (src) {
-    return (map((chunk: T) => { if (predicate(chunk)) return chunk }))(src);
+    return (map((chunk: T) => { 
+      if (predicate(chunk)) return chunk;
+      // Return undefined to filter out this value (map will not enqueue undefined values)
+    }))(src);
   }
 }

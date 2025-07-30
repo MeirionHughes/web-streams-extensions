@@ -45,9 +45,19 @@ describe("subscribe", () => {
       let count = 0;
       let tmp: number[] = [];
       let sub = subscribe(from(inputA),
-        (next) => { tmp.push(next); if (++count >= 2) { sub.unsubscribe() } },
-        () => complete(tmp),
-        (err) => error(err));
+        (next) => { 
+
+          tmp.push(next); if (++count >= 2) { sub.unsubscribe() } },
+        () => {
+
+          complete(tmp)
+        }
+          ,
+        (err) => {
+   
+          error(err)
+        }
+        );
     })
 
     expect(result, "from stream result matches expected").to.be.deep.eq(expected);
@@ -59,7 +69,8 @@ describe("subscribe", () => {
 
     try {
       await new Promise<void>((complete, error) => {
-        subscribe(from(inputA),
+        subscribe(
+          from(inputA),
           (next) => {},
           () => complete(),
           (err) => error(err));
@@ -68,7 +79,8 @@ describe("subscribe", () => {
       result = err;
     }
 
-    expect(result).to.not.be.undefined;
+    expect(result).to.not.be.null;
+  
     expect(result.message).to.be.eql("Foo");
   })
 })

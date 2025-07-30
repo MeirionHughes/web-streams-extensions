@@ -1,31 +1,71 @@
+/**
+ * Emits only the first value that matches the selector, then completes.
+ * If no selector is provided, emits the first value.
+ * 
+ * @template T The type of elements in the stream
+ * @param selector Optional predicate to test values
+ * @returns A stream operator that emits only the first matching value
+ * 
+ * @example
+ * ```typescript
+ * let input = [1, 2, 3, 4];
+ * let expected = [2];
+ * let stream = pipe(from(input), first(x => x % 2 === 0));
+ * let result = await toArray(stream);
+ * ```
+ */
 export function first<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableStream<T>) => ReadableStream<T> {
   return function(src:ReadableStream<T>){
     let reader = src.getReader();
     return new ReadableStream<T>({
       async start(controller){           
-        while(reader != null){
-          let next = await reader.read();
+        try {
+          while(reader != null){
+            let next = await reader.read();
 
-          if(reader == null || next.done){
-            reader = null;
-            controller.close();
-            return;
+            if(reader == null || next.done){
+              reader = null;
+              controller.close();
+              return;
+            }
+
+            if(selector(next.value)){
+              controller.enqueue(next.value);
+              controller.close();
+              try {
+                reader.cancel();
+                reader.releaseLock();
+              } catch (err) {
+                // Ignore cleanup errors
+              }
+              reader = null;
+              return;
+            }          
           }
-
-          if(selector(next.value)){
-            controller.enqueue(next.value);
-            controller.close();    
-            reader.cancel();        
-            reader.releaseLock();
+        } catch (err) {
+          controller.error(err);
+          if (reader) {
+            try {
+              reader.cancel(err);
+              reader.releaseLock();
+            } catch (e) {
+              // Ignore cleanup errors
+            }
             reader = null;
-            return;
-          }          
+          }
         }
       },
       cancel(reason?:any){
-        reader.cancel(reason);
-        reader.releaseLock();
-        reader = null;
+        if (reader) {
+          try {
+            reader.cancel(reason);
+            reader.releaseLock();
+          } catch (err) {
+            // Ignore cleanup errors
+          } finally {
+            reader = null;
+          }
+        }
       }    
     })
   }

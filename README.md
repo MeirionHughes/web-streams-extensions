@@ -7,43 +7,32 @@ Requires support for ReadableStream ([use a polyfill if not available](https://w
 
 Subjects require support for WritableStream. Requires support for async/await.
 
+## 🚀 Version 1.0 Breaking Changes
+
+**Enhanced `zip()` function:**
+- Now supports heterogeneous stream types with full TypeScript support
+- Added overloads for 2, 3, and 4 streams with optional selector functions
+- Legacy array format (`zip([stream1, stream2])`) still supported for backward compatibility
+
+**Removed `join()` function:**
+- Use `zip(streamA, streamB, selector)` instead of `join(streamA, streamB, selector)`
+- Provides the same functionality with better type safety and more flexibility
+
+**Migration examples:**
+```ts
+// Before (v0.x)
+import { join } from 'web-streams-extensions';
+const result = join(streamA, streamB, (a, b) => `${a}${b}`);
+
+// After (v1.0)
+import { zip } from 'web-streams-extensions';
+const result = zip(streamA, streamB, (a, b) => `${a}${b}`);
+```
+
 
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### 🐛 Reporting Bugs
-
-**Important**: All bug reports must include a reproducible failing test case.
-
-1. Fork the repository
-2. Add a failing test to `spec/failing.spec.ts` that reproduces the bug
-3. Open a bug report with the test code or link to your fork
-4. Follow the [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml)
-
-### Example Bug Report Test
-
-```typescript
-it("should handle empty arrays in concat - currently hangs", async () => {
-  let input = [[], [1, 2], []];
-  let expected = [1, 2];
-  
-  let result = await toArray(
-    pipe(
-      from(input),
-      concatAll()
-    )
-  );
-  
-  expect(result).to.deep.equal(expected);
-});
-```
-
-This approach ensures we can:
-- ✅ Understand the exact issue
-- ✅ Verify the bug exists  
-- ✅ Ensure our fix works
-- ✅ Prevent regressions
 
 ## Installation
 
@@ -73,8 +62,8 @@ console.log(result); // [4, 8, 12]
 - `from()` - Create stream from iterable, async iterable, promise, or function
 - `of()` - Create stream from arguments
 - `interval()` - Create stream that emits numbers at intervals
-- `concat()` - Concatenate multiple streams sequentially
-- `zip()` - Combine streams into arrays of corresponding values
+- `toConcatenated()` - Concatenate multiple streams sequentially
+- `zip()` - Combine multiple streams with optional selector functions
 - `defer()` - Defer stream creation until read
 
 ### Consuming Functions
@@ -84,7 +73,7 @@ console.log(result); // [4, 8, 12]
 - `subscribe()` - Subscribe with callbacks for next/complete/error
 
 ### Pipe Functions
-- `pipe()` - Chain operators with backpressure control
+- `pipe()` - Chain operators together
 - `retryPipe()` - Pipe with retry semantics on error
 
 ### Transformation Operators
@@ -113,8 +102,9 @@ console.log(result); // [4, 8, 12]
 - `startWith()` - Prepend values to stream
 
 ### Combination Operators
-- `concatAll()` - Flatten stream of streams sequentially
+- `concat()` - Flatten stream of streams sequentially
 - `merge()` - Flatten stream of streams with concurrency control
+- `mergeMap()` - Map each value to a stream and flatten with concurrency control
 
 ### Utility Operators
 - `tap()` - Observe values without modification
@@ -127,8 +117,8 @@ console.log(result); // [4, 8, 12]
 - `IdleScheduler` - Schedule during idle time
 
 ### Subjects
-- `Subject\<T>` - Multicast stream (hot observable)
-- `BehaviourSubject\<T>` - Subject that remembers last value
+- `Subject<T>` - Multicast stream (hot observable)
+- `BehaviourSubject<T>` - Subject that remembers last value
 
 
 
@@ -156,7 +146,7 @@ of(1, "foo", () => "bar", {})
 // Emits: 1, "foo", () => "bar", {}
 ```
 
-### interval(duration: number): ReadableStream\<number>
+### interval(duration: number): ReadableStream<number>
 
 Creates a ReadableStream that emits incremental numbers at specified intervals.
 
@@ -168,7 +158,7 @@ pipe(
 // Result: [0, 1, 2, 3, 4] over 5 seconds
 ```
 
-### concat\<T>(...streams: ReadableStream\<T>[]): ReadableStream\<T>
+### toConcatenated\<T>(...streams: ReadableStream\<T>[]): ReadableStream\<T>
 
 Concatenates several streams together in the order given. Each stream is read to completion before moving to the next.
 
@@ -177,20 +167,48 @@ It will not read from the streams until the result stream is read from (lazy eva
 ```ts
 let inputA = [1, 2];
 let inputB = [3, 4];
-let stream = concat(from(inputA), from(inputB));
-let result = await toArray(stream); // [1, 2, 3, 4]
-```
+let expected = [1, 2, 3, 4];
+let stream = toConcatenated(from(inputA), from(inputB));
+let result = await toArray(stream);
 
-### zip\<T>(sources: ReadableStream\<T>[]): ReadableStream\<T[]>
+### zip(...sources: ReadableStream<T>[], selector?: Function): ReadableStream
 
-Combines multiple streams by emitting arrays of corresponding values. Completes when any source stream completes.
+Combines multiple streams by pairing up values from each stream. Supports heterogeneous types and optional selector functions for transformation.
 
 ```ts
-let stream1 = from([1, 2, 3]);
-let stream2 = from(['a', 'b', 'c']);
-let result = await toArray(zip([stream1, stream2]));
+// Basic zip - returns tuples
+const numbers = from([1, 2, 3]);
+const letters = from(['a', 'b', 'c']);
+const result = await toArray(zip(numbers, letters));
 // Result: [[1, 'a'], [2, 'b'], [3, 'c']]
+
+// With selector function
+const combined = await toArray(zip(numbers, letters, (n, l) => `${n}${l}`));
+// Result: ['1a', '2b', '3c']
+
+// Three streams with different types
+const symbols = from(['!', '?', '.']);
+const booleans = from([true, false, true]);
+const result = await toArray(zip(
+  numbers, 
+  letters, 
+  symbols, 
+  booleans,
+  (n, l, s, b) => ({ num: n, letter: l, symbol: s, flag: b })
+));
+// Result: [
+//   { num: 1, letter: 'a', symbol: '!', flag: true },
+//   { num: 2, letter: 'b', symbol: '?', flag: false },
+//   { num: 3, letter: 'c', symbol: '.', flag: true }
+// ]
+
+// Legacy array format (for homogeneous streams)
+const streams = [from([1, 2, 3]), from([4, 5, 6]), from([7, 8, 9])];
+const result = await toArray(zip(streams));
+// Result: [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
 ```
+
+The stream completes when any of the source streams completes.
 
 ### defer\<T>(cb: () => Promise\<ReadableStream\<T>> | ReadableStream\<T>): ReadableStream\<T>
 
@@ -256,13 +274,13 @@ subscribe(src,
 
 Given inconsistencies in browser support for anything other than ReadableStream, we opted to make an Operator a function of the form:
 
-`type Op\<T, R> = (src: ReadableStream\<T>) => ReadableStream\<R>`
+`type Op<T, R> = (src: ReadableStream<T>) => ReadableStream<R>`
 
 This only requires ReadableStream to be implemented/available with getReader support. To aid in pipelining these operators, a `pipe` method is available: 
 
 ### pipe\<T>(src: ReadableStream\<T>, ...ops: Op[], options?: { highWaterMark?: number }): ReadableStream
 
-Pipes a source stream through a series of operators, creating a transformation pipeline. Each operator transforms the stream in some way. The optional `highWaterMark` parameter controls backpressure (defaults to 1).
+Pipes a source stream through a series of operators, creating a transformation pipeline. Each operator transforms the stream in some way. The optional `highWaterMark` parameter controls buffering (defaults to 1).
 
 ```ts
 let result = await toArray(
@@ -349,7 +367,7 @@ let result = await toArray(
 // Result: [10]
 ```
 
-#### switchMap\<T, R>(project: (value: T, index: number) => ReadableStream\<R>): Op\<T, R>
+#### switchMap\<T, R>(project: (value: T, index: number) => ReadableStream<R>): Op\<T, R>
 
 Maps each source value to a stream and flattens them, but only the most recent inner stream. When a new inner stream is created, the previous one is cancelled.
 
@@ -441,7 +459,7 @@ let result = await toArray(
 // Result: [1, 2, 3]
 ```
 
-#### takeUntil\<T>(notifier: ReadableStream\<any>): Op\<T, T>
+#### takeUntil\<T>(notifier: ReadableStream<any>): Op\<T, T>
 
 Takes values from the source until the notifier stream emits a value. When the notifier emits, the source stream is cancelled and the output completes.
 
@@ -510,7 +528,7 @@ let stream = pipe(
 
 ### Buffering Operators
 
-#### buffer\<T>(count: number): Op\<T, T[]>
+#### buffer\<T>(count: number): Op<T, T[]>
 
 Buffers elements and emits them as arrays when the buffer reaches the specified count. The final buffer (if not empty) is emitted when the source stream completes.
 
@@ -540,7 +558,7 @@ let result = await toArray(
 
 ### Combination Operators
 
-#### concatAll\<T>(): Op\<ReadableStream\<T>, T>
+#### concat\<T>(): Op<ReadableStream\<T>, T>
 
 Given a ReadableStream of ReadableStreams, concatenates the output of each stream in sequence.
 
@@ -549,13 +567,13 @@ let streams = [from([1, 2]), from([3, 4]), from([5])];
 let result = await toArray(
   pipe(
     from(streams),
-    concatAll()
+    concat()
   )
 );
 // Result: [1, 2, 3, 4, 5]
 ```
 
-#### merge\<T>(concurrent?: number): Op\<ReadableStream\<T> | Promise\<T>, T>
+#### merge<T>(concurrent?: number): Op<ReadableStream<T> | Promise<T>, T>
 
 Merges a stream of streams (or promises) into a single flattened stream, with optional concurrency control. Each inner stream is subscribed to and their values are merged into the output stream.
 
@@ -570,9 +588,33 @@ let result = await toArray(
 // Result: [1, 2, 3, 4, 5] (order may vary based on timing)
 ```
 
+#### mergeMap<T, R>(project: (value: T, index: number) => ReadableStream<R> | Promise<R> | ArrayLike<R>, concurrent?: number): Op<T, R>
+
+Maps each source value to a ReadableStream, Promise, or array, then flattens all inner streams into a single output stream with optional concurrency control.
+
+```ts
+// Map each number to a stream of that many values
+let result = await toArray(
+  pipe(
+    from([1, 2, 3]),
+    mergeMap(n => from(Array(n).fill(n)))
+  )
+);
+// Result: [1, 2, 2, 3, 3, 3] (order may vary due to concurrency)
+
+// With limited concurrency for HTTP requests
+let result = await toArray(
+  pipe(
+    from([1, 2, 3, 4]),
+    mergeMap(id => fetch(`/api/data/${id}`).then(r => r.json()), 2)
+  )
+);
+// Only 2 concurrent requests at a time
+```
+
 ### Utility Operators
 
-#### tap\<T>(cb: (chunk: T) => void | Promise\<void>): Op\<T, T>
+#### tap<T>(cb: (chunk: T) => void | Promise<void>): Op<T, T>
 
 Allows observing each chunk without modifying the stream. The output is exactly the same as the input.
 
@@ -587,7 +629,7 @@ let result = await toArray(
 // Result: [1, 2, 3, 4], sideEffects: [2, 4, 6, 8]
 ```
 
-#### on\<T>(callbacks: { start?(): void; complete?(): void; error?(err: any): void }): Op\<T, T>
+#### on<T>(callbacks: { start?(): void; complete?(): void; error?(err: any): void }): Op<T, T>
 
 Creates an operator that allows attaching lifecycle callbacks to a stream. Useful for side effects like logging, cleanup, or state management without modifying the stream's data flow.
 
@@ -604,7 +646,7 @@ let result = await toArray(
 );
 ```
 
-#### catchError\<T>(selector: (error: any, caught: ReadableStream\<T>) => ReadableStream\<T>): Op\<T, T>
+#### catchError<T>(selector: (error: any, caught: ReadableStream<T>) => ReadableStream<T>): Op<T, T>
 
 Catches errors from the source stream and switches to a fallback stream.
 
@@ -618,7 +660,7 @@ let result = await toArray(
 // If errorProneStream errors, switches to emit 'fallback', 'values'
 ```
 
-#### schedule\<T>(scheduler: Scheduler): Op\<T, T>
+#### schedule<T>(scheduler: Scheduler): Op<T, T>
 
 Schedules the emission of values using a custom scheduler.
 
@@ -633,7 +675,7 @@ let result = await toArray(
 );
 ```
 
-#### through\<T, R>(transform: TransformStream\<T, R>): Op\<T, R>
+#### through<T, R>(transform: TransformStream<T, R>): Op<T, R>
 
 Pipes the stream through a TransformStream, allowing integration with native Web Streams API transforms.
 
@@ -656,8 +698,7 @@ A scheduler that uses `requestIdleCallback` when available (in browser environme
 
 ```ts
 import { IdleScheduler, schedule } from 'web-streams-extensions';
-// or
-import { IdleScheduler } from 'web-streams-extensions/schedulers';
+
 
 const idleScheduler = new IdleScheduler();
 
@@ -668,8 +709,6 @@ let result = await toArray(
   )
 );
 ```
-
-## Advanced Usage
 
 ### Custom Schedulers
 
@@ -686,51 +725,16 @@ class CustomScheduler implements IScheduler {
 }
 
 const customScheduler = new CustomScheduler();
-```
 
-### Error Handling Patterns
-
-```ts
-// Comprehensive error handling with retries and fallbacks
-const robustStream = retryPipe(
-  () => fetchDataStream(),
-  map(data => processData(data)),
-  catchError(err => {
-    console.error('Processing failed:', err);
-    return from(['fallback-data']);
-  }),
-  { retries: 3, delay: 1000 }
-);
-```
-
-### Performance Optimization
-
-```ts
-// Use appropriate highWaterMark for your use case
-const highThroughputStream = pipe(
-  from(largeDataSet),
-  mapSync(x => x * 2), // Sync version is faster when possible
-  buffer(100), // Batch processing
-  { highWaterMark: 64 } // Higher buffer for better throughput
-);
-
-// Use backpressure-aware processing
-const backpressureStream = pipe(
-  from(asyncDataSource),
-  map(async data => {
-    // This will naturally backpressure if processing is slow
-    return await expensiveAsyncOperation(data);
-  })
-);
 ```
 
 ## Subjects
 
-Subjects are duplex streams that act as both readable and writable streams with automatic tee'ing of the readable side. Each access to `subject.readable` returns a _new_ ReadableStream\<T> that will receive all subsequent values.
+Subjects are duplex streams that act as both readable and writable streams with automatic tee'ing of the readable side. Each access to `subject.readable` returns a _new_ ReadableStream<T> that will receive all subsequent values.
 
-### Subject\<T>
+### Subject<T>
 
-A Subject is a special type of stream that allows values to be multicast to many observers. It implements both readable and writable streams with proper backpressure handling.
+A Subject is a special type of stream that allows values to be multicast to many observers. It implements both readable and writable streams with full Web Streams compatibility.
 
 **Key features:**
 - Each call to `.readable` returns a new ReadableStream
@@ -740,16 +744,16 @@ A Subject is a special type of stream that allows values to be multicast to many
 
 **Properties:**
 ```ts
-readonly readable: ReadableStream\<T>;  // Creates a new readable stream
-readonly writable: WritableStream\<T>;  // Writable side for piping
+readonly readable: ReadableStream<T>;  // Creates a new readable stream
+readonly writable: WritableStream<T>;  // Writable side for piping
 readonly closed: boolean;              // Whether the subject is closed
 ```
 
 **Methods:**
 ```ts
-next(value: T): Promise\<number>;       // Push a value directly
-complete(): Promise\<void>;             // Complete the subject
-error(err: any): Promise\<void>;        // Error the subject
+next(value: T): Promise<number>;       // Push a value directly
+complete(): Promise<void>;             // Complete the subject
+error(err: any): Promise<void>;        // Error the subject
 subscribe(subscriber): SubscriptionLike; // Subscribe with callbacks
 ```
 
@@ -759,7 +763,7 @@ subscribe(subscriber): SubscriptionLike; // Subscribe with callbacks
 import { Subject, pipe, map, filter, toArray } from 'web-streams-extensions';
 
 // Create a subject
-const subject = new Subject\<number>();
+const subject = new Subject<number>();
 
 // Get multiple readers
 const reader1 = toArray(pipe(subject.readable, filter(x => x % 2 === 0)));
@@ -780,7 +784,7 @@ const doubled = await reader2;     // [2, 4, 6, 8]
 
 ```ts
 const source = from([1, 2, 3, 4]);
-const subject = new Subject\<number>();
+const subject = new Subject<number>();
 
 // Pipe source to subject
 source.pipeTo(subject.writable);
@@ -794,14 +798,14 @@ console.log(result); // [1, 2, 3, 4]
 
 ```ts
 let input = [1, 2, 3, 4];
-let subject = new Subject\<number>();
+let subject = new Subject<number>();
 
 let result = await toArray(from(input).pipeThrough(subject));
 
 expect(result).to.be.deep.eq(expected); // [1,2,3,4]
 ```
 
-### BehaviourSubject\<T>
+### BehaviourSubject<T>
 
 A BehaviourSubject is like a Subject but remembers the last emitted value and immediately emits it to new subscribers.
 
@@ -846,6 +850,8 @@ const slowStream = pipe(
   })
 );
 ```
+
+This is achieved (as best as possible) by operators adhering to the controller.desiredSize and having operator producers to wait for 'pull' calls before resuming. 
 
 ## Browser Compatibility
 

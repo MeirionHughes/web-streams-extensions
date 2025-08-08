@@ -7,10 +7,9 @@ export * from './_scheduler.js';
 export * from './_subject.js';
 export * from './_subscription.js';
 
-export * from "./concat.js";
+export * from "./toConcatenated.js";
 export * from "./defer.js";
 export * from "./from.js";
-export * from "./join.js";
 export * from "./of.js";
 export * from "./pipe.js";
 export * from "./retry-pipe.js";

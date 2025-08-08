@@ -1,4 +1,6 @@
 import { Op } from "./_op.js";
+import { isTransform } from "./utils/is-transform.js";
+import { through } from "./operators/through.js";
 
 /**
  * Options for retry pipe operations.
@@ -151,45 +153,85 @@ export function retryPipe(
   const { retries = 3, delay, highWaterMark = 1 } = options;
 
   // Return a ReadableStream that handles retries internally
+  let reader: ReadableStreamDefaultReader<any> | null = null;
+  let attempts = 0;
+
+  async function createStreamAndReader() {
+    if (reader) {
+      try {
+        reader.releaseLock();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      reader = null;
+    }
+
+    attempts++;
+    
+    // Create a new stream and apply operators
+    const sourceStream = streamFactory();
+    let resultStream: ReadableStream<any> = sourceStream;
+    
+    // Apply operators using the same pattern as pipe.ts
+    resultStream = operators
+      .map(x => isTransform(x) ? through(x) : x)
+      .reduce((stream, operator) => {
+        return operator(stream, { highWaterMark });
+      }, resultStream);
+    
+    reader = resultStream.getReader();
+  }
+
+  async function flush(controller: ReadableStreamDefaultController<any>) {
+    try {
+      while (controller.desiredSize > 0 && reader != null) {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          if (reader) {
+            reader.releaseLock();
+            reader = null;
+          }
+          return;
+        }
+        controller.enqueue(value);
+      }
+    } catch (error) {
+      // Handle errors during reading - retry if we haven't exceeded attempts
+      if (attempts > retries) {
+        controller.error(error);
+        if (reader) {
+          try {
+            reader.cancel(error);
+            reader.releaseLock();
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+          reader = null;
+        }
+        return;
+      }
+      
+      // Wait before retry if delay is specified
+      if (delay && attempts <= retries) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      // Retry by creating a new stream
+      await createStreamAndReader();
+      await flush(controller);
+    }
+  }
+
   return new ReadableStream({
     async start(controller) {
-      let attempts = 0;
       let lastError: any;
-
+      
       while (attempts <= retries) {
         try {
-          attempts++;
-          
-          // Create a new stream and apply operators
-          const sourceStream = streamFactory();
-          let resultStream: ReadableStream<any> = sourceStream;
-          
-          // Apply operators one by one
-          for (const operator of operators) {
-            if (typeof operator === 'function') {
-              resultStream = operator(resultStream, { highWaterMark });
-            } else if (operator && typeof operator.readable !== 'undefined' && typeof operator.writable !== 'undefined') {
-              // TransformStream
-              resultStream = resultStream.pipeThrough(operator);
-            }
-          }
-          
-          // Pipe the result stream to our controller
-          const reader = resultStream.getReader();
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) {
-                controller.close();
-                return;
-              }
-              controller.enqueue(value);
-            }
-          } finally {
-            reader.releaseLock();
-          }
-          
-          
+          await createStreamAndReader();
+          await flush(controller);
+          return; // Success, exit the retry loop
         } catch (error) {
           lastError = error;
           
@@ -204,19 +246,37 @@ export function retryPipe(
           }
         }
       }
+      
+      // If we get here, all retries failed
+      controller.error(lastError);
+    },
+    async pull(controller) {
+      await flush(controller);
+    },
+    cancel(reason?: any) {
+      if (reader) {
+        try {
+          reader.cancel(reason);
+          reader.releaseLock();
+        } catch (err) {
+          // Ignore cleanup errors
+        } finally {
+          reader = null;
+        }
+      }
     }
-  });
+  }, { highWaterMark });
 }
 
 /**
- * Creates a retry pipe that validates the entire stream consumption.
- * This version actually consumes a test stream to validate it works end-to-end
- * before creating the final stream to return.
+ * Creates a retry pipe that validates the stream factory and operators work correctly.
+ * This version attempts to create and apply operators without consuming the stream,
+ * then returns a proper retryPipe stream for actual use.
  * 
  * @template T The input stream type
  * @param streamFactory Function that creates a new source stream for each attempt
  * @param operators Stream operators to apply to each attempt
- * @returns A promise that resolves to a stream that should work
+ * @returns A promise that resolves to a retry-enabled stream
  */
 export async function retryPipeValidated<T>(
   streamFactory: () => ReadableStream<T>,
@@ -240,44 +300,23 @@ export async function retryPipeValidated<T>(
     try {
       attempts++;
       
-      // Create a test stream and fully consume it to validate
+      // Validate that we can create the stream and apply operators without consuming
       const testStream = streamFactory();
-      let pipedTestStream: ReadableStream<any> = testStream;
+      let validationStream: ReadableStream<any> = testStream;
       
-      // Apply operators to test stream
-      for (const operator of operators) {
-        if (typeof operator === 'function') {
-          pipedTestStream = operator(pipedTestStream, { highWaterMark });
-        } else if (operator && typeof operator.readable !== 'undefined' && typeof operator.writable !== 'undefined') {
-          pipedTestStream = pipedTestStream.pipeThrough(operator);
-        }
-      }
+      // Apply operators using the same pattern as pipe.ts
+      validationStream = operators
+        .map(x => isTransform(x) ? through(x) : x)
+        .reduce((stream, operator) => {
+          return operator(stream, { highWaterMark });
+        }, validationStream);
       
-      // Consume the entire test stream to validate it works
-      const reader = pipedTestStream.getReader();
-      try {
-        while (true) {
-          const { done } = await reader.read();
-          if (done) break;
-        }
-      } finally {
-        reader.releaseLock();
-      }
+      // Just verify we can get a reader without consuming
+      const reader = validationStream.getReader();
+      reader.releaseLock();
       
-      // Test succeeded, create the actual stream to return
-      const actualStream = streamFactory();
-      let finalStream: ReadableStream<any> = actualStream;
-      
-      // Apply operators to actual stream
-      for (const operator of operators) {
-        if (typeof operator === 'function') {
-          finalStream = operator(finalStream, { highWaterMark });
-        } else if (operator && typeof operator.readable !== 'undefined' && typeof operator.writable !== 'undefined') {
-          finalStream = finalStream.pipeThrough(operator);
-        }
-      }
-      
-      return finalStream;
+      // Validation succeeded, return a proper retryPipe
+      return retryPipe(streamFactory, ...args);
       
     } catch (error) {
       lastError = error;

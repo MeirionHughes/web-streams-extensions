@@ -5,6 +5,9 @@
   "type": "module",
   "types": "./dist/esm/index.d.ts",
   "main": "./dist/esm/index.js",
+  "engines": {
+    "node": ">=14.0.0"
+  },
   "exports": {
     ".": {
       "import": "./dist/esm/index.js",

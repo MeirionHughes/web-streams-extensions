@@ -1,5 +1,6 @@
 import { isReadableLike, ReadableLike } from "./_readable-like.js";
 import { through } from "./operators/through.js";
+import { isTransform } from "./utils/is-transform.js";
 import { Op } from "./_op.js";
 
 export type ReadableSource<T> = ReadableLike<T> | ReadableStream<T>
@@ -147,16 +148,4 @@ export function pipe(src: ReadableSource<any>, ...args: any[]): ReadableStream<a
     .reduce((stream, operator) => {
       return operator(stream, options)
     }, src as ReadableStream<any>)
-}
-
-/**
- * Type guard to check if an operator is a TransformStream.
- * 
- * @template T Input type
- * @template R Output type
- * @param x The operator to check
- * @returns True if the operator is a TransformStream
- */
-function isTransform<T, R>(x: Op<T, R> ): x is TransformStream<T, R>{
-  return x && typeof x === 'object' && 'readable' in x && 'writable' in x;
 }

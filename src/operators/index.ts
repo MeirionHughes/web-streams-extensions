@@ -1,6 +1,6 @@
 export * from "./buffer.js";
 export * from "./catchError.js";
-export * from "./concatAll.js";
+export * from "./concat.js";
 export * from "./debounceTime.js";
 export * from "./distinctUntilChanged.js";
 export * from "./filter.js";
@@ -9,6 +9,7 @@ export * from "./last.js";
 export * from "./map.js";
 export * from "./mapSync.js";
 export * from "./merge.js";
+export * from "./mergeMap.js";
 export * from "./on.js";
 export * from "./reduce.js";
 export * from "./scan.js";

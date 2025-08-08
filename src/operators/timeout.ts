@@ -33,7 +33,7 @@ export function timeout<T>(duration: number): (src: ReadableStream<T>, opts?: { 
 
     async function pull(controller: ReadableStreamDefaultController<T>) {
       try {
-        while (reader != null && !cancelled) {
+        while (controller.desiredSize > 0 && reader != null && !cancelled) {
           let next = await reader.read();
           clearTimer();
           

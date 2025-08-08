@@ -3,8 +3,8 @@
  * buffer elements and then send an array to the reader. 
  * @param count elements to buffer before enqueue
  */
-export function skip<T>(count: number, highWaterMark = 16): (src:ReadableStream<T>)=>ReadableStream<T>{ 
-  return function(src:ReadableStream<T>){
+export function skip<T>(count: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> { 
+  return function(src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
     let reader: ReadableStreamDefaultReader<T> = null;
 
     async function flush(controller: ReadableStreamDefaultController<T>) {
@@ -43,6 +43,6 @@ export function skip<T>(count: number, highWaterMark = 16): (src:ReadableStream<
           reader = null;
         }
       }
-    }, {highWaterMark});
+    }, { highWaterMark: opts?.highWaterMark ?? 16 });
   }
 }

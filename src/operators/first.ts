@@ -14,8 +14,8 @@
  * let result = await toArray(stream);
  * ```
  */
-export function first<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableStream<T>) => ReadableStream<T> {
-  return function(src:ReadableStream<T>){
+export function first<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
+  return function(src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
     let reader = src.getReader();
     return new ReadableStream<T>({
       async start(controller){           
@@ -67,6 +67,6 @@ export function first<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableSt
           }
         }
       }    
-    })
+    }, { highWaterMark: opts?.highWaterMark ?? 16 })
   }
 }

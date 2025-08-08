@@ -5,7 +5,6 @@
  * 
  * @template T The type of elements to buffer
  * @param duration Duration in milliseconds to wait after the last chunk
- * @param highWaterMark The high water mark for the output stream
  * @returns A stream operator that debounces elements by time
  * 
  * @example
@@ -16,12 +15,12 @@
  * );
  * ```
  */
-export function debounceTime<T>(duration: number, highWaterMark = 16): (src: ReadableStream<T>) => ReadableStream<T[]> {
+export function debounceTime<T>(duration: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T[]> {
   if (duration <= 0) {
     throw new Error("Debounce duration must be positive");
   }
   
-  return function (src: ReadableStream<T>) {
+  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let buffer: T[] = [];
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -116,6 +115,6 @@ export function debounceTime<T>(duration: number, highWaterMark = 16): (src: Rea
           }
         }
       }
-    }, { highWaterMark });
+    }, { highWaterMark: opts?.highWaterMark ?? 16 });
   }
 }

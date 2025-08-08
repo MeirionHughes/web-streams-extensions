@@ -1,7 +1,4 @@
 {
-  "extensions": ["ts"],
-  "spec": ["spec/**/*.spec.ts"],
-  "timeout": 10000,
-  "bail": true,
-  "loader": "ts-node/esm"
+  "extensions": [".ts"],
+  "node-option": ["import=tsx"]
 }

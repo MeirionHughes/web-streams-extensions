@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, pipe, map, take, toPromise, from, tap, first } from '../src/index.js';
+import { first, from, map, pipe, take, tap, toArray, toPromise } from '../src/index.js';
 import { Subject } from "../src/subject.js";
 import { sleep } from '../src/utils/sleep.js';
 
@@ -242,11 +242,16 @@ describe("subject", () => {
     let cancelled = false;
     let cancelReason = null;
 
+    let startResolve = null;
+    let startPromise = new Promise((resolve, reject) => { startResolve = resolve });
+
     // Create a ReadableStream that tracks if it was cancelled
     let sourceStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(1);
-        controller.enqueue(2);
+      async start(controller) {
+        await startPromise;
+        for(let i=0; i< 100; i++){
+          await controller.enqueue(i);
+        }
       },
       cancel(reason) {
         cancelled = true;
@@ -255,12 +260,19 @@ describe("subject", () => {
     });
  
     let pipePromise = sourceStream.pipeTo(subject.writable);
-    
+
     // Immediately complete the subject - the cancel will only be called when trying to write
     await subject.complete();
 
-    await pipePromise;    
+    // Now have the readable try to send data
+    startResolve();
 
+    // Wait for the pipe promise to complete/fail
+    try {
+      await pipePromise;
+    } catch (err) {
+      // Expected to fail due to subject being closed
+    }
 
     // Verify the source stream was cancelled
     expect(cancelled).to.be.true;

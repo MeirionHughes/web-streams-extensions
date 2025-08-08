@@ -4,7 +4,6 @@
  * 
  * @template T The type of elements to buffer
  * @param count The number of elements to buffer before emitting
- * @param highWaterMark The high water mark for the output stream
  * @returns A stream operator that buffers elements into arrays
  * 
  * @example
@@ -15,12 +14,12 @@
  * let result = await toArray(stream);
  * ```
  */
-export function buffer<T>(count: number, highWaterMark = 16): (src:ReadableStream<T>)=>ReadableStream<T[]>{ 
+export function buffer<T>(count: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T[]> { 
   if (count <= 0) {
     throw new Error("Buffer count must be greater than 0");
   }
   
-  return function(src:ReadableStream<T>){
+  return function(src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let buffer: T[] = [];
 
@@ -80,6 +79,6 @@ export function buffer<T>(count: number, highWaterMark = 16): (src:ReadableStrea
           }
         }
       }
-    }, {highWaterMark});
+    }, { highWaterMark: opts?.highWaterMark ?? 16 });
   }
 }

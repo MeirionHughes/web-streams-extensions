@@ -1,0 +1,87 @@
+name: Bug Report Validation
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  validate-bug-report:
+    if: contains(github.event.issue.labels.*.name, 'bug')
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check for failing test requirement
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const issue = context.payload.issue;
+          const body = issue.body || '';
+          
+          // Check if the issue mentions failing tests or reproduction
+          const hasReproduction = body.toLowerCase().includes('failing test') || 
+                                body.toLowerCase().includes('reproduce') ||
+                                body.toLowerCase().includes('spec/failing.spec.ts') ||
+                                body.includes('```typescript') ||
+                                body.includes('```ts');
+          
+          if (!hasReproduction) {
+            const comment = `👋 Thank you for the bug report!
+
+            **Missing Requirement**: This bug report doesn't appear to include a failing test case.
+
+            📋 **What's needed**:
+            1. Create a failing test that reproduces the bug
+            2. Add it to \`spec/failing.spec.ts\` in your fork
+            3. Update this issue with the test code or link to your fork
+
+            🔗 **Resources**:
+            - [Contributing Guide](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/master/CONTRIBUTING.md#-reporting-bugs)
+            - [Example failing test structure](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/master/CONTRIBUTING.md#creating-a-failing-test)
+
+            This helps us:
+            ✅ Understand the exact issue
+            ✅ Verify the bug exists  
+            ✅ Ensure our fix works
+            ✅ Prevent regressions
+
+            We'll review this issue once a failing test is provided. Thanks! 🙏`;
+
+            await github.rest.issues.createComment({
+              issue_number: issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+            // Add label to indicate missing test
+            await github.rest.issues.addLabels({
+              issue_number: issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['needs-failing-test']
+            });
+          } else {
+            // Remove the label if it exists and test is now present
+            try {
+              await github.rest.issues.removeLabel({
+                issue_number: issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'needs-failing-test'
+              });
+            } catch (error) {
+              // Label might not exist, ignore
+            }
+
+            // Add a positive comment
+            const comment = `✅ Thanks for including reproduction details! 
+
+            We'll review this bug report and the failing test case. A maintainer will investigate and provide feedback soon.`;
+
+            await github.rest.issues.createComment({
+              issue_number: issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          }

@@ -14,12 +14,12 @@
  * );
  * ```
  */
-export function timeout<T>(duration: number): (src: ReadableStream<T>) => ReadableStream<T> {
+export function timeout<T>(duration: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
   if (duration <= 0) {
     throw new Error("Timeout duration must be positive");
   }
   
-  return function (src: ReadableStream<T>) {
+  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
@@ -100,6 +100,6 @@ export function timeout<T>(duration: number): (src: ReadableStream<T>) => Readab
           }
         }
       }
-    });
+    }, { highWaterMark: opts?.highWaterMark ?? 16 });
   }
 }

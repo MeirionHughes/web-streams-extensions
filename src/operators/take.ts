@@ -5,7 +5,6 @@
  * 
  * @template T The type of elements in the stream
  * @param count The number of elements to take
- * @param highWaterMark The high water mark for the output stream
  * @returns A stream operator that limits the number of elements
  * 
  * @example
@@ -16,12 +15,12 @@
  * let result = await toArray(stream);
  * ```
  */
-export function take<T>(count: number, highWaterMark = 16): (src: ReadableStream<T>) => ReadableStream<T> {
+export function take<T>(count: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
   if (count < 0) {
     throw new Error("Take count must be non-negative");
   }
   
-  return function (src: ReadableStream<T>) {
+  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let taken = 0;
 
@@ -91,6 +90,6 @@ export function take<T>(count: number, highWaterMark = 16): (src: ReadableStream
           }
         }
       }
-    }, { highWaterMark });
+    }, { highWaterMark: opts?.highWaterMark ?? 16 });
   }
 }

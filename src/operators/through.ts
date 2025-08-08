@@ -24,11 +24,13 @@
  * // Emits: "HELLO", "WORLD"
  * ```
  */
-export function through<T, R = T>(dst: TransformStream<T, R>): (src: ReadableStream<T>) => ReadableStream<R> {
-    return function (src: ReadableStream<T>) {
+export function through<T, R = T>(dst: TransformStream<T, R>): (src: ReadableStream<T>, opt?: { highWaterMark?: number }) => ReadableStream<R> {
+    return function (src: ReadableStream<T>, opt?: { highWaterMark?: number }) {
         if (!dst || typeof dst.readable === 'undefined' || typeof dst.writable === 'undefined') {
             throw new Error('Invalid TransformStream provided to through operator');
         }
+        // pipeThrough doesn't directly support highWaterMark, it's applied during stream creation
+        // The highWaterMark is typically used when creating ReadableStreams or WritableStreams
         return src.pipeThrough(dst);
     };
 }

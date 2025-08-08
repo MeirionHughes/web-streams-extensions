@@ -35,6 +35,7 @@ export function subscribe<T>(
 
   let reader = src.getReader();
   let isClosed = false;
+  let isErroring = false; // Track if we're in an error state
 
   let sub = {
     get closed() { return isClosed; },
@@ -43,9 +44,10 @@ export function subscribe<T>(
         try {
           reader.cancel();
           reader.releaseLock();
-          if(complete) complete();
+          // Only call complete if this is a normal unsubscribe, not due to error
+          if(complete && !isErroring) complete();
         } catch (err) {
-          console.log("cleanup error", err);
+          console.debug("cleanup error", err);
           // Ignore cleanup errors
         } finally {
           reader = null;
@@ -75,7 +77,7 @@ export function subscribe<T>(
             await next(chunk.value);
           } catch (err) {
             // If next callback throws, treat it as an error
-            sub.unsubscribe();
+            isErroring = true;
             if (error && !isClosed) {
               try {
                 error(err);
@@ -83,6 +85,7 @@ export function subscribe<T>(
                 // Ignore errors in error callback
               }
             }
+            sub.unsubscribe();
             break;
           }
         }
@@ -95,6 +98,7 @@ export function subscribe<T>(
           // Ignore errors in error callback
         }
       }
+      isErroring = true;
       sub.unsubscribe();
     }
   }

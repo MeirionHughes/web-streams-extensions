@@ -22,7 +22,7 @@ export interface MapSyncSelector<T, R> {
   (chunk: T): R | undefined;
 }
 
-export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: ReadableStream<T>, opts?: { highWaterMark: number }) => ReadableStream<R> {
+export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
   let reader: ReadableStreamDefaultReader<T> | null = null;
 
   async function flush(controller: ReadableStreamDefaultController<R>) {
@@ -63,7 +63,7 @@ export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: Readable
     }
   }
 
-  return function (src: ReadableStream<T>, opts?: { highWaterMark: number }) {
+  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
     return new ReadableStream<R>({
       start(controller) {
         reader = src.getReader();

@@ -1,4 +1,4 @@
-import { map } from "./map.js";
+import { mapSync } from "./mapSync.js";
 
 /**
  * Filters values in a stream based on a predicate function.
@@ -18,13 +18,13 @@ import { map } from "./map.js";
  * // Emits: 2, 4, 6
  * ```
  */
-export function filter<T, S extends T>(predicate: (chunk: T) => chunk is S): (src: ReadableStream<T>) => ReadableStream<S> 
-export function filter<T>(predicate: (chunk: T) => boolean): (src: ReadableStream<T>) => ReadableStream<T>
-export function filter<T>(predicate: (chunk: T) => boolean): (src: ReadableStream<T>) => ReadableStream<T> {
-  return function (src) {
-    return (map((chunk: T) => { 
+export function filter<T, S extends T>(predicate: (chunk: T) => chunk is S): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<S> 
+export function filter<T>(predicate: (chunk: T) => boolean): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T>
+export function filter<T>(predicate: (chunk: T) => boolean): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
+  return function (src, opts?: { highWaterMark?: number }) {
+    return (mapSync((chunk: T) => { 
       if (predicate(chunk)) return chunk;
       // Return undefined to filter out this value (map will not enqueue undefined values)
-    }))(src);
+    }))(src, opts);
   }
 }

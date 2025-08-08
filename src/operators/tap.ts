@@ -19,8 +19,8 @@ import { map } from "./map.js";
  * // Emits: 2, 4, 6
  * ```
  */
-export function tap<T>(cb: (chunk: T) => void): (src: ReadableStream<T>, opts?: { highWaterMark: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<T>, opts?: { highWaterMark: number }) {
+export function tap<T>(cb: (chunk: T) => void): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
+  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
     return map((chunk: T) => {
       try {
         cb(chunk);

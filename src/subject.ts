@@ -5,7 +5,9 @@ import { Subscriber, SubscriptionLike } from "./_subscription.js";
 /**
  * A Subject is a special type of stream that allows values to be multicast to many observers.
  * It acts as both an observer and an observable, implementing both readable and writable streams.
- * 
+ * It can be used like a TransformStream, allowing you to pipeThrough the subject.
+ * Note: completing/erroring the writable will complete/error the subject.
+ *
  * @template T The type of values emitted by the subject
  */
 export class Subject<T> implements ISubject<T> {
@@ -27,6 +29,7 @@ export class Subject<T> implements ISubject<T> {
   /**
    * Creates a new readable stream that will emit all values from this subject.
    * Each call to this getter returns a new ReadableStream that will receive all subsequent values.
+   * Canceling the ReadableStream will not affect the Subject. 
    * 
    * @returns A new ReadableStream that emits values from this subject
    */
@@ -79,18 +82,25 @@ export class Subject<T> implements ISubject<T> {
   /**
    * Creates a writable stream that can be used to send values to this subject.
    * Values written to this stream will be emitted to all subscribers.
-   * 
+   * Completing or erroring this stream will complete or error the subject.
    * @returns A WritableStream that accepts values of type T
    */
   get writable() {
+    if (this._writableStream) {
+      return this._writableStream;
+    }
+
     const queuingStrategy = new CountQueuingStrategy({ highWaterMark: 1 });
     const self = this;
-    let stream = new WritableStream(
+    
+    this._writableStream = new WritableStream(
       {
         write(chunk, controller) {
           if (self.closed) {
-            controller.error(new Error("Subject is closed"));
-            return;
+            // When subject is closed, error the controller to abort the pipe
+            const error = new Error("Subject is closed");
+            controller.error(error);
+            throw error;
           }
           if (controller.signal.aborted) {
             self._error(controller.signal.reason || new Error("Aborted"));
@@ -111,16 +121,7 @@ export class Subject<T> implements ISubject<T> {
         }
       }, queuingStrategy);
 
-    this._closing.then(_ => {
-      if (!stream.locked) {
-        try {
-          stream.close();
-        } catch (err) {
-          // Stream might already be closed, ignore
-        }
-      }
-    })
-    return stream;
+    return this._writableStream;
   }
 
   /**
@@ -167,7 +168,7 @@ export class Subject<T> implements ISubject<T> {
   }
 
   /**
-   * Error the subject. All subscribers will receive the error.
+   * Error the subject. All subscribers will receive the error and the subject will be closed
    * 
    * @param err - The error to emit
    * @returns Promise that resolves when error is processed

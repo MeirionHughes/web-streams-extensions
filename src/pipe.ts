@@ -2,7 +2,11 @@ import { isReadableLike, ReadableLike } from "./_readable-like.js";
 import { through } from "./operators/through.js";
 import { Op } from "./_op.js";
 
-type ReadableSource<T> = ReadableLike<T> | ReadableStream<T>
+export type ReadableSource<T> = ReadableLike<T> | ReadableStream<T>
+
+export type PipeOptions = {
+  highWaterMark?: number
+}
 
 /**
  * Pipes a source stream through a series of operators.
@@ -11,63 +15,138 @@ type ReadableSource<T> = ReadableLike<T> | ReadableStream<T>
  * @template T The type of the source stream
  * @param src The source stream or ReadableLike object
  * @returns The source stream
- */
-export function pipe<T>(src: ReadableSource<T> ): ReadableStream<T>;
-
-/**
- * Pipes a source stream through one operator.
  * 
- * @template T The type of the source stream
- * @template A The type of the result stream
- * @param src The source stream or ReadableLike object
- * @param op1 The first operator
- * @returns The transformed stream
+ * @example
+ * ```typescript
+ * const result = pipe(
+ *   from([1, 2, 3, 4, 5]),
+ *   map(x => x * 2),
+ *   filter(x => x > 5)
+ * );
+ * ```
  */
-export function pipe<T, A>(src: ReadableSource<T>, op1: Op<T, A>): ReadableStream<A>;
+export function pipe<T>(
+  src: ReadableSource<T>
+): ReadableStream<T>;
 
-/**
- * Pipes a source stream through two operators.
- * 
- * @template T The type of the source stream
- * @template A The type after the first operator
- * @template B The type of the result stream
- * @param src The source stream or ReadableLike object
- * @param op1 The first operator
- * @param op2 The second operator
- * @returns The transformed stream
- */
-export function pipe<T, A, B>(src: ReadableSource<T>, op1: Op<T, A>, op2: Op<A, B>): ReadableStream<B>;
+export function pipe<T, R1>(
+  src: ReadableSource<T>,
+  op1: Op<T, R1> | PipeOptions
+): ReadableStream<R1>;
 
-/**
- * Pipes a source stream through three operators.
- */
-export function pipe<T, A, B, C>(src: ReadableSource<T>, op1: Op<T, A>, op2: Op<A, B>, op3: Op<B, C>): ReadableStream<C>;
+export function pipe<T, R1, R2=R1>(
+  src: ReadableSource<T>,
+  op1: Op<T, R1>,
+  op2: Op<R1, R2> | PipeOptions
+): ReadableStream<R2>;
 
-/**
- * Pipes a source stream through four operators.
- */
-export function pipe<T, A, B, C, D>(src: ReadableSource<T>, op1: Op<T, A>, op2: Op<A, B>, op3: Op<B, C>, op4: Op<C, D>): ReadableStream<D>;
+export function pipe<T, R1, R2, R3=R2>(
+  src: ReadableSource<T>,
+  op1: Op<T, R1>,
+  op2: Op<R1, R2>,
+  op3: Op<R2, R3> | PipeOptions
+): ReadableStream<R3>;
 
-/**
- * Pipes a source stream through five operators.
- */
-export function pipe<T, A, B, C, D, E>(src: ReadableSource<T>, op1: Op<T, A>, op2: Op<A, B>, op3: Op<B, C>, op4: Op<C, D>, op5: Op<D, E>): ReadableStream<E>;
+export function pipe<T, R1, R2, R3, R4=R3>(
+  src: ReadableSource<T>,
+  op1: Op<T, R1>,
+  op2: Op<R1, R2>,
+  op3: Op<R2, R3>,
+  op4: Op<R3, R4> | PipeOptions
+): ReadableStream<R4>;
 
-/**
- * Pipes a source stream through six operators.
- */
-export function pipe<T, A, B, C, D, E, F>(src: ReadableSource<T>, op1: Op<T, A>, op2: Op<A, B>, op3: Op<B, C>, op4: Op<C, D>, op5: Op<D, E>, op6: Op<E, F>): ReadableStream<F>;
+export function pipe<T, R1, R2, R3, R4, R5=R4>(
+  src: ReadableSource<T>,
+  op1: Op<T, R1>,
+  op2: Op<R1, R2>,
+  op3: Op<R2, R3>,
+  op4: Op<R3, R4>,
+  op5: Op<R4, R5> | PipeOptions
+): ReadableStream<R5>;
 
-export function pipe(src: ReadableSource<any>, ...ops: Op<any, any>[]): ReadableStream<any> {
+export function pipe<T, R1, R2, R3, R4, R5, R6=R5>(
+  src: ReadableSource<T>,
+  op1: Op<T, R1>,
+  op2: Op<R1, R2>,
+  op3: Op<R2, R3>,
+  op4: Op<R3, R4>,
+  op5: Op<R4, R5>,
+  op6: Op<R5, R6> | PipeOptions
+): ReadableStream<R6>;
+
+export function pipe<T, R1, R2, R3, R4, R5, R6, R7=R6>(
+  src: ReadableSource<T>,
+  op1: Op<T, R1>,
+  op2: Op<R1, R2>,
+  op3: Op<R2, R3>,
+  op4: Op<R3, R4>,
+  op5: Op<R4, R5>,
+  op6: Op<R5, R6>,
+  op7: Op<R6, R7> | PipeOptions
+): ReadableStream<R7>;
+
+export function pipe<T, R1, R2, R3, R4, R5, R6, R7, R8=R7>(
+  src: ReadableSource<T>,
+  op1: Op<T, R1>,
+  op2: Op<R1, R2>,
+  op3: Op<R2, R3>,
+  op4: Op<R3, R4>,
+  op5: Op<R4, R5>,
+  op6: Op<R5, R6>,
+  op7: Op<R6, R7>,
+  op8: Op<R7, R8> | PipeOptions
+): ReadableStream<R8>;
+
+export function pipe<T, R1, R2, R3, R4, R5, R6, R7, R8, R9=R8>(
+  src: ReadableSource<T>,
+  op1: Op<T, R1>,
+  op2: Op<R1, R2>,
+  op3: Op<R2, R3>,
+  op4: Op<R3, R4>,
+  op5: Op<R4, R5>,
+  op6: Op<R5, R6>,
+  op7: Op<R6, R7>,
+  op8: Op<R7, R8>,
+  op9: Op<R8, R9> | PipeOptions
+): ReadableStream<R9>;
+
+export function pipe<T, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10=R9>(
+  src: ReadableSource<T>,
+  op1: Op<T, R1>,
+  op2: Op<R1, R2>,
+  op3: Op<R2, R3>,
+  op4: Op<R3, R4>,
+  op5: Op<R4, R5>,
+  op6: Op<R5, R6>,
+  op7: Op<R6, R7>,
+  op8: Op<R7, R8>,
+  op9: Op<R8, R9>,
+  op10: Op<R9, R10> | PipeOptions
+): ReadableStream<R10>;
+
+export function pipe(src: ReadableSource<any>, ...args: any[]): ReadableStream<any> {
   if(isReadableLike(src)){
     src = src.readable;
-  }  
+  }
 
-  return ops
+  // Extract options from the end of arguments if present
+  let options: PipeOptions = { highWaterMark: 1 }; // default highWaterMark
+  let operators: any[] = args;
+
+  // Check if last argument is options
+  const lastArg = args[args.length - 1];
+  if (lastArg && typeof lastArg === 'object' && 
+      !lastArg.readable && !lastArg.writable && 
+      typeof lastArg.pipeThrough !== 'function') {
+    options = { ...options, ...lastArg };
+    operators = args.slice(0, -1);
+  }
+
+  return operators
     .map(x => isTransform(x) ? through(x): x)
-    .reduce((p, c) => {
-      return c(p, { highWaterMark: 1 })
-    }, src as ReadableStream<unknown>)
+    .reduce((stream, operator) => {
+      return operator(stream, options)
+    }, src as ReadableStream<any>)
 }
 
 /**

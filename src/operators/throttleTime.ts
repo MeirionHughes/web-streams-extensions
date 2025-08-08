@@ -1,3 +1,5 @@
+import { Signal } from "../utils/signal.js";
+
 /**
  * Limits the rate of emissions to at most one per specified time period.
  * The first value is emitted immediately, then subsequent values are ignored until the time period expires.
@@ -23,11 +25,13 @@ export function throttleTime<T>(
     let lastEmitTime = 0;
     let pendingValue: T | undefined;
     let hasPendingValue = false;
+    let timeoutId: NodeJS.Timeout | number | null = null;
+    let emitSignal = new Signal();
 
     function cleanup() {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
       }
       if (reader) {
         reader.releaseLock();
@@ -35,19 +39,29 @@ export function throttleTime<T>(
       }
     }
 
-    async function flush(controller: ReadableStreamDefaultController<T>) {
-      try {
-        const now = Date.now();
-
-        // Emit pending value if enough time has passed
-        if (hasPendingValue && (now - lastEmitTime) >= duration) {
-          if (controller.desiredSize > 0) {
+    function scheduleEmission(controller: ReadableStreamDefaultController<T>) {
+      if (timeoutId || !hasPendingValue) return;
+      
+      const now = Date.now();
+      const timeUntilNextEmit = Math.max(0, duration - (now - lastEmitTime));
+      
+      timeoutId = setTimeout(() => {
+        timeoutId = null;
+        if (hasPendingValue && controller.desiredSize > 0) {
+          try {
             controller.enqueue(pendingValue!);
-            lastEmitTime = now;
+            lastEmitTime = Date.now();
             hasPendingValue = false;
+            emitSignal.signal(); // Signal that we've emitted
+          } catch (err) {
+            // Controller might be closed, ignore
           }
         }
+      }, timeUntilNextEmit);
+    }
 
+    async function flush(controller: ReadableStreamDefaultController<T>) {
+      try {
         while (controller.desiredSize > 0 && reader != null) {
           let { done, value } = await reader.read();
           
@@ -68,10 +82,19 @@ export function throttleTime<T>(
             controller.enqueue(value);
             lastEmitTime = currentTime;
             hasPendingValue = false;
+            
+            // Clear any pending timeout since we just emitted
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
           } else {
             // Store as pending value (replaces previous pending)
             pendingValue = value;
             hasPendingValue = true;
+            
+            // Schedule emission for when throttle period expires
+            scheduleEmission(controller);
           }
         }
       } catch (err) {
@@ -80,32 +103,16 @@ export function throttleTime<T>(
       }
     }
 
-    // Set up periodic emission of pending values
-    let intervalId: NodeJS.Timeout | number | null = null;
-
     return new ReadableStream<T>({
       async start(controller) {
         reader = src.getReader();
-        
-        // Periodically check for pending values to emit
-        intervalId = setInterval(async () => {
-          if (hasPendingValue && controller.desiredSize > 0) {
-            const now = Date.now();
-            if ((now - lastEmitTime) >= duration) {
-              try {
-                controller.enqueue(pendingValue!);
-                lastEmitTime = now;
-                hasPendingValue = false;
-              } catch (err) {
-                // Controller might be closed, ignore
-              }
-            }
-          }
-        }, Math.min(duration / 4, 50)); // Check frequently but not too frequently
-
         await flush(controller);
       },
       async pull(controller) {
+        // If we have a pending emission scheduled, wait for it
+        if (timeoutId && hasPendingValue) {
+          await emitSignal.wait();
+        }
         await flush(controller);
       },
       cancel() {

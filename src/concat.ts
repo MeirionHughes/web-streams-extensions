@@ -13,12 +13,12 @@
  * let inputA = [1, 2];
  * let inputB = [3, 4];
  * let expected = [1, 2, 3, 4];
- * let stream = toConcatenated(from(inputA), from(inputB));
+ * let stream = concat(from(inputA), from(inputB));
  * let result = await toArray(stream);
  * ```
  */
-export function toConcatenated<T>(...streams: ReadableStream<T>[]): ReadableStream<T>{
-  if(streams.length == 0) throw new Error("must pass at least 1 stream to toConcatenated");
+export function concat<T>(...streams: ReadableStream<T>[]): ReadableStream<T>{
+  if(streams.length == 0) throw new Error("must pass at least 1 stream to concat");
   
   let reader: ReadableStreamDefaultReader<T> = null;
 

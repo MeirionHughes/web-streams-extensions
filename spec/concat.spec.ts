@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { toArray, toConcatenated, filter, from, zip, buffer } from '../src/index.js';
+import { toArray, concat, filter, from, zip, buffer } from '../src/index.js';
 
 describe("steams", () => {
   it("can concat streams", async () => {
     let inputA = [1, 2, 3, 4];
     let inputB = [5, 6, 7, 8];
     let expected = inputA.concat(inputB);
-    let result = await toArray(toConcatenated(
+    let result = await toArray(concat(
       new ReadableStream({
         start(controller) {
           for (let item of inputA) {
@@ -29,12 +29,12 @@ describe("steams", () => {
   })
 
   it("throws error when no streams provided", () => {
-    expect(() => toConcatenated()).to.throw("must pass at least 1 stream to toConcatenated");
+    expect(() => concat()).to.throw("must pass at least 1 stream to concat");
   })
 
   it("handles single stream", async () => {
     let input = [1, 2, 3];
-    let result = await toArray(toConcatenated(from(input)));
+    let result = await toArray(concat(from(input)));
     expect(result).to.be.deep.eq(input);
   })
 
@@ -50,7 +50,7 @@ describe("steams", () => {
     });
 
     try {
-      await toArray(toConcatenated(errorStream, from([4, 5, 6])));
+      await toArray(concat(errorStream, from([4, 5, 6])));
       expect.fail("Should have thrown error");
     } catch (err) {
       expect(err.message).to.include(errorMessage);
@@ -69,7 +69,7 @@ describe("steams", () => {
     });
 
     try {
-      await toArray(toConcatenated(from([1, 2, 3]), errorStream));
+      await toArray(concat(from([1, 2, 3]), errorStream));
       expect.fail("Should have thrown error");
     } catch (err) {
       expect(err.message).to.include(errorMessage);
@@ -89,8 +89,8 @@ describe("steams", () => {
     });
 
     let streamB = from([3, 4, 5]);
-    let concatenated = toConcatenated(streamA, streamB);
-    let reader = concatenated.getReader();
+    let concatStream = concat(streamA, streamB);
+    let reader = concatStream.getReader();
     
     // Read one value
     let result1 = await reader.read();
@@ -116,7 +116,7 @@ describe("steams", () => {
 
     let dataStream = from([1, 2]);
     
-    let result = await toArray(toConcatenated(emptyStream1, emptyStream2, dataStream));
+    let result = await toArray(concat(emptyStream1, emptyStream2, dataStream));
     expect(result).to.be.deep.eq([1, 2]);
   })
 
@@ -125,7 +125,7 @@ describe("steams", () => {
     let streamB = from([3, 4]);
     let streamC = from([5, 6]);
     
-    let result = await toArray(toConcatenated(streamA, streamB, streamC));
+    let result = await toArray(concat(streamA, streamB, streamC));
     expect(result).to.be.deep.eq([1, 2, 3, 4, 5, 6]);
   })
 
@@ -139,8 +139,8 @@ describe("steams", () => {
       }
     });
 
-    let concatenated = toConcatenated(sourceStream);
-    let reader = concatenated.getReader();
+    let concatStream = concat(sourceStream);
+    let reader = concatStream.getReader();
     
     await reader.read();
     

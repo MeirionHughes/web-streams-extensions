@@ -1,5 +1,12 @@
 # WebStream Extensions
 
+[![npm version](https://img.shields.io/npm/v/web-streams-extensions.svg)](https://www.npmjs.com/package/web-streams-extensions)
+[![Build Status](https://github.com/MeirionHughes/web-streams-extensions/workflows/Test%20and%20Coverage/badge.svg)](https://github.com/MeirionHughes/web-streams-extensions/actions)
+[![codecov](https://codecov.io/gh/MeirionHughes/web-streams-extensions/branch/master/graph/badge.svg)](https://codecov.io/gh/MeirionHughes/web-streams-extensions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
+
 A collection of helper methods for WebStreams, inspired by ReactiveExtensions. 
 Being built on-top of ReadableStream, we can have a reactive pipeline with **non-blocking back-pressure built-in**. 
 
@@ -38,9 +45,15 @@ console.log(result); // [4, 8, 12]
 ### Creation Functions
 - `from()` - Create stream from iterable, async iterable, promise, or function
 - `of()` - Create stream from arguments
+- `empty()` - Create stream that completes immediately without emitting values
+- `throwError()` - Create stream that errors immediately with provided error
+- `timer()` - Create stream that emits after delay, optionally with interval
+- `range()` - Create stream that emits sequence of numbers
 - `interval()` - Create stream that emits numbers at intervals
-- `toConcatenated()` - Concatenate multiple streams sequentially
+- `concatenated()` - Concatenate multiple streams sequentially
 - `zip()` - Combine multiple streams with optional selector functions
+- `combineLatest()` - Combine latest values from multiple streams
+- `race()` - Emit from first source stream to emit
 - `defer()` - Defer stream creation until read
 
 ### Consuming Functions
@@ -59,15 +72,26 @@ console.log(result); // [4, 8, 12]
 - `scan()` - Accumulate with intermediate results
 - `reduce()` - Accumulate to final result
 - `switchMap()` - Map to streams, switch to latest
+- `concatMap()` - Map to streams, concatenate sequentially
+- `exhaustMap()` - Map to streams, ignore new while active
+- `concatAll()` - Flatten stream of streams sequentially
+- `mergeAll()` - Flatten stream of streams concurrently
+- `switchAll()` - Switch to latest inner stream
+- `pairwise()` - Emit previous and current values as pairs
+- `delay()` - Delay emissions by specified time
 
 ### Filtering Operators
 - `filter()` - Filter values by predicate
 - `distinctUntilChanged()` - Remove consecutive duplicates
+- `distinct()` - Remove duplicate values (with optional key selector)
 - `first()` - Take first value (optionally matching predicate)
 - `last()` - Take last value (optionally matching predicate)
 - `take()` - Take first N values
 - `takeUntil()` - Take until notifier emits
+- `takeWhile()` - Take while predicate is true
 - `skip()` - Skip first N values
+- `skipWhile()` - Skip while predicate is true
+- `ignoreElements()` - Ignore all values, preserve completion
 
 ### Timing Operators
 - `debounceTime()` - Buffer until quiet period
@@ -89,6 +113,9 @@ console.log(result); // [4, 8, 12]
 - `catchError()` - Handle errors with fallback stream
 - `schedule()` - Control emission timing with scheduler
 - `through()` - Use native TransformStream
+- `withLatestFrom()` - Combine with latest from other stream
+- `defaultIfEmpty()` - Provide default value for empty streams
+- `count()` - Count values (optionally with predicate)
 
 ### Schedulers
 - `IdleScheduler` - Schedule during idle time
@@ -136,7 +163,7 @@ pipe(
 // Result: [0, 1, 2, 3, 4] over 5 seconds
 ```
 
-### toConcatenated\<T>(...streams: ReadableStream\<T>[]): ReadableStream\<T>
+### concatenated\<T>(...streams: ReadableStream\<T>[]): ReadableStream\<T>
 
 Concatenates several streams together in the order given. Each stream is read to completion before moving to the next.
 
@@ -146,7 +173,7 @@ It will not read from the streams until the result stream is read from (lazy eva
 let inputA = [1, 2];
 let inputB = [3, 4];
 let expected = [1, 2, 3, 4];
-let stream = toConcatenated(from(inputA), from(inputB));
+let stream = concatenated(from(inputA), from(inputB));
 let result = await toArray(stream);
 
 ### zip(...sources: ReadableStream<T>[], selector?: Function): ReadableStream
@@ -195,6 +222,95 @@ Defers the creation of a ReadableStream until it's actually read from. Useful fo
 ```ts
 let result = await toArray(defer(() => Promise.resolve(from([1, 2, 3, 4]))));
 // Result: [1, 2, 3, 4]
+```
+
+### empty\<T>(): ReadableStream\<T>
+
+Creates a ReadableStream that immediately completes without emitting any values.
+
+```ts
+const result = await toArray(empty());
+// Result: []
+
+const typedEmpty = await toArray(empty<number>());
+// Result: [] (typed as number[])
+```
+
+### throwError\<T>(error: any | (() => any)): ReadableStream\<T>
+
+Creates a ReadableStream that immediately errors with the provided error or error factory function.
+
+```ts
+// With direct error
+try {
+  await toArray(throwError(new Error("Something went wrong")));
+} catch (err) {
+  console.log(err.message); // "Something went wrong"
+}
+
+// With error factory function
+const errorFactory = () => new Error(`Error at ${Date.now()}`);
+try {
+  await toArray(throwError(errorFactory));
+} catch (err) {
+  console.log(err.message); // "Error at [timestamp]"
+}
+```
+
+### timer(dueTime: number, interval?: number): ReadableStream\<number>
+
+Creates a ReadableStream that emits after the specified delay. If an interval is provided, continues emitting incrementally.
+
+```ts
+// Single emission after delay
+const result = await toArray(timer(1000));
+// Result: [0] (after 1 second)
+
+// Emit every interval after initial delay
+const result = await toArray(pipe(timer(500, 1000), take(3)));
+// Result: [0, 1, 2] (first at 500ms, then every 1000ms)
+```
+
+### range(start: number, count: number): ReadableStream\<number>
+
+Creates a ReadableStream that emits a sequence of numbers within a specified range.
+
+```ts
+const result = await toArray(range(1, 5));
+// Result: [1, 2, 3, 4, 5]
+
+const result2 = await toArray(range(10, 3));
+// Result: [10, 11, 12]
+
+const empty = await toArray(range(0, 0));
+// Result: []
+```
+
+### combineLatest\<T>(...sources: ReadableStream\<T>[]): ReadableStream\<T[]>
+
+Combines multiple streams by emitting the latest values from each stream whenever any stream emits.
+
+```ts
+const numbers = from([1, 2, 3]);
+const letters = from(['a', 'b', 'c']);
+
+const result = await toArray(pipe(
+  combineLatest(numbers, letters),
+  take(3)
+));
+// Result: [[1, 'a'], [2, 'b'], [3, 'c']] (simplified - actual timing dependent)
+```
+
+### race\<T>(...sources: ReadableStream\<T>[]): ReadableStream\<T>
+
+Creates a stream that mirrors the first source stream to emit a value, cancelling the others.
+
+```ts
+const fast = from([1, 2, 3]);
+const slow = timer(1000);
+
+const result = await toArray(pipe(race(fast, slow), take(2)));
+// Result: [1, 2] (fast stream wins)
 ```
 
 
@@ -272,6 +388,8 @@ let result = await toArray(
 // Result: [2, 4, 8]
 ```
 
+⚠️ReadableStreams are not recoverable like Observables are. If you start and consume a stream, that instance cannot be reused.  
+
 ### retryPipe\<T>(streamFactory: () => ReadableStream\<T>, ...operators: Op[], options?: RetryPipeOptions): ReadableStream\<T>
 
 Creates a retry pipe that can recreate the entire stream pipeline on error. Unlike regular streams, this allows for retry semantics by recreating the source stream and reapplying all operators.
@@ -283,6 +401,88 @@ const result = retryPipe(
   filter(x => x > 10),
   { retries: 3, delay: 1000, highWaterMark: 8 }
 );
+```
+⚠️ All operators within this library generally follow the pattern: 
+
+```ts
+function opmaker(args){
+  // arg parsing
+  return function op(in: ReadableStream){ 
+    // state...
+    return out /* ReadableStream */
+  }
+}
+```
+i.e. they do not cache or store values within the opmaker scope. This means that they are compatible with the retryPipe, where it will regenerate and repipe the op function pipeline on each retry. If you use custom operators, ensure they follow the same rule. 
+
+## Creation Functions
+
+### empty(): ReadableStream<never>
+
+Creates a stream that completes immediately without emitting any values.
+
+```ts
+let result = await toArray(empty());
+// Result: []
+```
+
+### throwError(error: any): ReadableStream<never>
+
+Creates a stream that immediately emits an error.
+
+```ts
+try {
+  await toArray(throwError(new Error('Something went wrong')));
+} catch (error) {
+  console.log(error.message); // "Something went wrong"
+}
+```
+
+### timer(delay: number, interval?: number): ReadableStream<number>
+
+Creates a stream that emits after a delay, optionally repeating at intervals.
+
+```ts
+// Single emission after 1000ms
+let result = await toArray(pipe(timer(1000), take(1)));
+// Result: [0]
+
+// Emit every 500ms starting after 1000ms
+let result = await toArray(pipe(timer(1000, 500), take(3)));
+// Result: [0, 1, 2]
+```
+
+### range(start: number, count: number): ReadableStream<number>
+
+Creates a stream that emits a sequence of numbers in a range.
+
+```ts
+let result = await toArray(range(5, 3));
+// Result: [5, 6, 7]
+```
+
+### combineLatest<T>(sources: ReadableStream<T>[], project?: (...values: T[]) => R): ReadableStream<T[] | R>
+
+Combines the latest values from multiple streams, emitting whenever any source emits.
+
+```ts
+let numbers = from([1, 2, 3]);
+let letters = from(['a', 'b', 'c']);
+
+let result = await toArray(combineLatest([numbers, letters]));
+// Result: [[1, 'a'], [2, 'b'], [3, 'c']]
+```
+
+### race<T>(...sources: ReadableStream<T>[]): ReadableStream<T>
+
+Returns a stream that mirrors the first source stream to emit a value.
+
+```ts
+let fast = timer(100);
+let slow = timer(500);
+
+let result = await toArray(pipe(race(fast, slow), take(1)));
+// Result: [0] (from the faster timer)
 ```
 
 ## Operators
@@ -363,6 +563,127 @@ let result = await toArray(
 );
 // Result: ['abc-result1', 'abc-result2', 'abc-result3']
 // Earlier searches for 'a' and 'ab' are cancelled when 'abc' starts
+```
+
+#### concatMap\<T, R>(project: (value: T, index: number) => ReadableStream<R> | Promise<R> | ArrayLike<R>): Op\<T, R>
+
+Maps each source value to a stream, promise, or array and concatenates them sequentially. Each inner stream completes before the next one starts.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([1, 2, 3]),
+    concatMap(n => from([n, n * 10]))
+  )
+);
+// Result: [1, 10, 2, 20, 3, 30]
+
+// Works with promises
+let result2 = await toArray(
+  pipe(
+    from([1, 2]),
+    concatMap(n => Promise.resolve(n * 2))
+  )
+);
+// Result: [2, 4]
+```
+
+#### exhaustMap\<T, R>(project: (value: T, index: number) => ReadableStream<R> | Promise<R> | ArrayLike<R>): Op\<T, R>
+
+Maps each source value to a stream, but ignores new source values while the current inner stream is still active.
+
+```ts
+// Only the first value gets processed while others are ignored
+let result = await toArray(
+  pipe(
+    from([1, 2, 3]),
+    exhaustMap(n => from([n, n * 10]))
+  )
+);
+// Result: [1, 10] (2 and 3 are ignored while first stream is active)
+```
+
+#### concatAll\<T>(): Op<ReadableStream<T>, T>
+
+Flattens a stream of streams by concatenating them sequentially. Each inner stream completes before the next one starts.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([
+      from([1, 2]),
+      from([3, 4]),
+      from([5, 6])
+    ]),
+    concatAll()
+  )
+);
+// Result: [1, 2, 3, 4, 5, 6]
+```
+
+#### mergeAll\<T>(concurrent?: number): Op<ReadableStream<T>, T>
+
+Flattens a stream of streams by merging them concurrently with optional concurrency control.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([
+      from([1, 2]),
+      from([3, 4])
+    ]),
+    mergeAll()
+  )
+);
+// Result: [1, 2, 3, 4] (order may vary due to concurrency)
+```
+
+#### switchAll\<T>(): Op<ReadableStream<T>, T>
+
+Flattens a stream of streams by switching to each new inner stream, cancelling the previous one.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([
+      from([1, 2]),
+      from([3, 4])
+    ]),
+    switchAll()
+  )
+);
+// Result: [3, 4] (first stream cancelled when second arrives)
+```
+
+#### pairwise\<T>(): Op\<T, [T, T]>
+
+Emits the previous and current values as a pair. Only starts emitting after the second value.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([1, 2, 3, 4, 5]),
+    pairwise()
+  )
+);
+// Result: [[1, 2], [2, 3], [3, 4], [4, 5]]
+```
+
+#### delay\<T>(duration: number): Op\<T, T>
+
+Delays the emission of each value by the specified duration in milliseconds.
+
+```ts
+const start = Date.now();
+let result = await toArray(
+  pipe(
+    from([1, 2, 3]),
+    delay(100)
+  )
+);
+const elapsed = Date.now() - start;
+// Result: [1, 2, 3] (after ~100ms delay)
+// elapsed >= 100
 ```
 
 ### Filtering Operators
@@ -463,6 +784,75 @@ let result = await toArray(
   )
 );
 // Result: [3, 4, 5]
+```
+
+#### distinct\<T>(keySelector?: (value: T) => any): Op\<T, T>
+
+Filters out duplicate values. Uses strict equality by default, or a key selector function for custom comparison.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([1, 2, 2, 3, 1, 4, 3]),
+    distinct()
+  )
+);
+// Result: [1, 2, 3, 4]
+
+// With key selector
+let result2 = await toArray(
+  pipe(
+    from([
+      { id: 1, name: 'John' },
+      { id: 2, name: 'Jane' },
+      { id: 1, name: 'John Doe' }
+    ]),
+    distinct(person => person.id)
+  )
+);
+// Result: [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }]
+```
+
+#### skipWhile\<T>(predicate: (value: T) => boolean): Op\<T, T>
+
+Skips values while the predicate returns true, then emits all remaining values.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([1, 2, 3, 2, 4, 1, 5]),
+    skipWhile(x => x < 3)
+  )
+);
+// Result: [3, 2, 4, 1, 5]
+```
+
+#### takeWhile\<T>(predicate: (value: T) => boolean): Op\<T, T>
+
+Takes values while the predicate returns true, then completes.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([1, 2, 3, 4, 5]),
+    takeWhile(x => x < 3)
+  )
+);
+// Result: [1, 2]
+```
+
+#### ignoreElements\<T>(): Op\<T, never>
+
+Ignores all emitted values and only preserves the completion or error signal.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([1, 2, 3, 4, 5]),
+    ignoreElements()
+  )
+);
+// Result: []
 ```
 
 ### Timing Operators
@@ -590,6 +980,37 @@ let result = await toArray(
 // Only 2 concurrent requests at a time
 ```
 
+#### withLatestFrom<T, U, R>(other: ReadableStream<U>, combiner?: (value: T, otherValue: U) => R): Op<T, R | [T, U]>
+
+Combines each emission from the source stream with the latest value from another stream. Only emits when the source emits, using the most recent value from the other stream.
+
+```ts
+let numbers = from([1, 2, 3]);
+let letters = from(['a', 'b', 'c']);
+
+let result = await toArray(
+  pipe(
+    numbers,
+    withLatestFrom(letters) // Combine with latest from letters
+  )
+);
+// Result: [[1, 'a'], [2, 'b'], [3, 'c']]
+```
+
+#### pairwise<T>(): Op<T, [T, T]>
+
+Emits the previous and current value as a pair. Skips the first emission since there's no previous value.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([1, 2, 3, 4]),
+    pairwise()
+  )
+);
+// Result: [[1, 2], [2, 3], [3, 4]]
+```
+
 ### Utility Operators
 
 #### tap<T>(cb: (chunk: T) => void | Promise<void>): Op<T, T>
@@ -664,6 +1085,34 @@ let result = await toArray(
     through(new TextEncoderStream()) // Use native transform
   )
 );
+```
+
+#### defaultIfEmpty<T>(defaultValue: T): Op<T, T>
+
+Emits a default value if the source stream completes without emitting any values.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([]), // Empty stream
+    defaultIfEmpty('default')
+  )
+);
+// Result: ['default']
+```
+
+#### count<T>(predicate?: (value: T) => boolean): Op<T, number>
+
+Counts the number of emissions from the source stream. If a predicate is provided, only counts emissions that satisfy the predicate.
+
+```ts
+let result = await toArray(
+  pipe(
+    from([1, 2, 3, 4, 5]),
+    count(x => x % 2 === 0) // Count even numbers
+  )
+);
+// Result: [2]
 ```
 
 ## Schedulers

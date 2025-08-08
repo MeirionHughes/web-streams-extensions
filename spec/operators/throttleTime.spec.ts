@@ -288,27 +288,31 @@ describe("throttleTime", () => {
     reader.releaseLock();
   });
 
-  it("should cleanup interval on error", async () => {
-    let intervalsCleaned = 0;
-    const originalClearInterval = clearInterval;
-    (global as any).clearInterval = (id: any) => {
-      intervalsCleaned++;
-      return originalClearInterval(id);
+  it("should cleanup timeout on error", async () => {
+    let timeoutsCleaned = 0;
+    const originalClearTimeout = clearTimeout;
+    (global as any).clearTimeout = (id: any) => {
+      timeoutsCleaned++;
+      return originalClearTimeout(id);
     };
     
     try {
-      const errorStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(1);
-          controller.error(new Error("Test error"));
-        }
-      });
+      const subject = new Subject<number>();
+      const errorPromise = toArray(pipe(
+        subject.readable,
+        throttleTime(100)
+      ));
 
+      // Emit first value (will be emitted immediately)
+      await subject.next(1);
+      // Emit second value (will be pending and create a timeout)
+      await subject.next(2);
+      
+      // Now error the stream, which should trigger cleanup
+      await subject.error(new Error("Test error"));
+      
       try {
-        await toArray(pipe(
-          errorStream,
-          throttleTime(100)
-        ));
+        await errorPromise;
         expect.fail("Should have thrown an error");
       } catch (err) {
         // Expected error
@@ -317,18 +321,18 @@ describe("throttleTime", () => {
       // Give some time for cleanup
       await new Promise(resolve => setTimeout(resolve, 10));
       
-      expect(intervalsCleaned).to.be.greaterThan(0);
+      expect(timeoutsCleaned).to.be.greaterThan(0);
     } finally {
-      (global as any).clearInterval = originalClearInterval;
+      (global as any).clearTimeout = originalClearTimeout;
     }
   });
 
-  it("should cleanup interval on cancel", async () => {
-    let intervalsCleaned = 0;
-    const originalClearInterval = clearInterval;
-    (global as any).clearInterval = (id: any) => {
-      intervalsCleaned++;
-      return originalClearInterval(id);
+  it("should cleanup timeout on cancel", async () => {
+    let timeoutsCleaned = 0;
+    const originalClearTimeout = clearTimeout;
+    (global as any).clearTimeout = (id: any) => {
+      timeoutsCleaned++;
+      return originalClearTimeout(id);
     };
     
     try {
@@ -341,18 +345,26 @@ describe("throttleTime", () => {
       
       const reader = stream.getReader();
       
+      // Emit first value (will be emitted immediately)
       await subject.next(1);
       await reader.read();
       
+      // Emit second value (will be pending and create a timeout)
+      await subject.next(2);
+      
+      // Small delay to ensure timeout is created
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      // Cancel should trigger cleanup of the pending timeout
       await reader.cancel("test");
       reader.releaseLock();
       
       // Give some time for cleanup
       await new Promise(resolve => setTimeout(resolve, 10));
       
-      expect(intervalsCleaned).to.be.greaterThan(0);
+      expect(timeoutsCleaned).to.be.greaterThan(0);
     } finally {
-      (global as any).clearInterval = originalClearInterval;
+      (global as any).clearTimeout = originalClearTimeout;
     }
   });
 

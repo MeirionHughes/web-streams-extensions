@@ -1,8 +1,8 @@
 import { expect } from "chai";
-import { toArray, from, pipe, buffer, concat } from '../../src/index.js';
+import { toArray, from, pipe, buffer, concatAll } from '../../src/index.js';
 import { Subject } from '../../src/subjects/subject.js';
 
-describe("concat operator", () => {
+describe("concatAll operator", () => {
 
   it("can concatenate stream of streams ", async () => {
     let input = [from([1, 2]), from([3, 4]), from([5])];
@@ -11,7 +11,7 @@ describe("concat operator", () => {
     let result = await toArray(
       pipe(
         from(input),
-        concat())
+        concatAll())
     );
 
     expect(result, "stream result matches expected").to.be.deep.eq(expected);
@@ -24,7 +24,7 @@ describe("concat operator", () => {
     let result = await toArray(
       pipe(
         input,
-        concat())
+        concatAll())
     );
 
     expect(result, "stream result matches expected").to.be.deep.eq(expected);
@@ -37,7 +37,7 @@ describe("concat operator", () => {
     let result = await toArray(
       pipe(
         input,
-        concat())
+        concatAll())
     );
 
     expect(result, "stream result matches expected").to.be.deep.eq(expected);
@@ -47,7 +47,7 @@ describe("concat operator", () => {
     let result = await toArray(
       pipe(
         from([]),
-        concat()
+        concatAll()
       )
     );
 
@@ -61,7 +61,7 @@ describe("concat operator", () => {
     let result = await toArray(
       pipe(
         from(input),
-        concat()
+        concatAll()
       )
     );
 
@@ -73,7 +73,7 @@ describe("concat operator", () => {
     
     const stream = pipe(
       subject.readable,
-      concat()
+      concatAll()
     );
     
     const reader = stream.getReader();
@@ -95,7 +95,7 @@ describe("concat operator", () => {
     const resultPromise = toArray(
       pipe(
         from([subject1.readable, subject2.readable]),
-        concat()
+        concatAll()
       )
     );
     
@@ -122,7 +122,7 @@ describe("concat operator", () => {
     const result = await toArray(
       pipe(
         from(streams),
-        concat()
+        concatAll()
       )
     );
 

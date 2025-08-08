@@ -3,6 +3,8 @@
     "target": "ESNext",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "sourceMap": true,
+    "inlineSources": true,    
     "lib": [
       "ESNext",
       "DOM"

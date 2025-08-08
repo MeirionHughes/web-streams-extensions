@@ -1,7 +1,7 @@
 import { expect } from "chai";
-import { first, from, map, pipe, take, tap, toArray, toPromise } from '../src/index.js';
-import { Subject } from "../src/subject.js";
-import { sleep } from '../src/utils/sleep.js';
+import { first, from, map, pipe, take, tap, toArray, toPromise } from '../../src/index.js';
+import { Subject } from "../../src/subjects/subject.js";
+import { sleep } from '../../src/utils/sleep.js';
 
 describe("subject", () => {
   it("can observe with multiple readers - manual write", async () => {

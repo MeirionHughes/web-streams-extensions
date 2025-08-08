@@ -1,4 +1,4 @@
-import { Subscriber, SubscriptionLike } from "./_subscription.js";
+import { Subscriber, SubscriptionLike } from "../_subscription.js";
 import { Subject } from "./subject.js";
 
 export class BehaviorSubject<T> extends Subject<T>{

@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { toArray, from, pipe, mergeMap } from '../../src/index.js';
-import { Subject } from '../../src/subject.js';
+import { Subject } from '../../src/subjects/subject.js';
 
 describe("mergeMap operator", () => {
 

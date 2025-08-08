@@ -5,7 +5,7 @@ describe("Zip", () => {
   describe("Two streams", () => {
     it("should zip two streams without selector (returns tuple)", async () => {
       const numbers = from([1, 2, 3]);
-      const letters = from(['a', 'b', 'c']);
+      const letters = from(['a', 'b', 'c', 'X']);
       
       const result = await toArray(zip(numbers, letters));
       

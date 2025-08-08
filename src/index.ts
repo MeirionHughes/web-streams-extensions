@@ -1,5 +1,6 @@
 export * from "./operators/index.js";
 export * from "./schedulers/index.js";
+export * from "./subjects/index.js";
 
 export * from './_op.js';
 export * from './_readable-like.js';
@@ -18,8 +19,6 @@ export * from "./to-promise.js";
 export * from "./to-string.js";
 export * from "./zip.js";
 
-export * from "./behaviour_subject.js";
-export * from "./subject.js";
 export * from "./subscribe.js";
 
 

@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { toArray, from, pipe, first } from '../../src/index.js';
-import { Subject } from "../../src/subject.js";
+import { Subject } from "../../src/subjects/subject.js";
 
 describe("first", () => {
   it("can get the first element of stream", async () => {

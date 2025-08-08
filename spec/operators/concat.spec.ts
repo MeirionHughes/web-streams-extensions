@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { toArray, from, pipe, buffer, concat } from '../../src/index.js';
-import { Subject } from '../../src/subject.js';
+import { Subject } from '../../src/subjects/subject.js';
 
 describe("concat operator", () => {
 

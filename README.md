@@ -4,31 +4,8 @@ A collection of helper methods for WebStreams, inspired by ReactiveExtensions.
 Being built on-top of ReadableStream, we can have a reactive pipeline with **non-blocking back-pressure built-in**. 
 
 Requires support for ReadableStream ([use a polyfill if not available](https://www.npmjs.com/package/web-streams-polyfill)).
-
-Subjects require support for WritableStream. Requires support for async/await.
-
-## 🚀 Version 1.0 Breaking Changes
-
-**Enhanced `zip()` function:**
-- Now supports heterogeneous stream types with full TypeScript support
-- Added overloads for 2, 3, and 4 streams with optional selector functions
-- Legacy array format (`zip([stream1, stream2])`) still supported for backward compatibility
-
-**Removed `join()` function:**
-- Use `zip(streamA, streamB, selector)` instead of `join(streamA, streamB, selector)`
-- Provides the same functionality with better type safety and more flexibility
-
-**Migration examples:**
-```ts
-// Before (v0.x)
-import { join } from 'web-streams-extensions';
-const result = join(streamA, streamB, (a, b) => `${a}${b}`);
-
-// After (v1.0)
-import { zip } from 'web-streams-extensions';
-const result = zip(streamA, streamB, (a, b) => `${a}${b}`);
-```
-
+Subjects require support for WritableStream. 
+Requires support for async/await.
 
 ## Contributing
 
@@ -119,6 +96,7 @@ console.log(result); // [4, 8, 12]
 ### Subjects
 - `Subject<T>` - Multicast stream (hot observable)
 - `BehaviourSubject<T>` - Subject that remembers last value
+- `ReplaySubject<T>` - Subject that replays buffered values to new subscribers
 
 
 
@@ -815,6 +793,116 @@ const behaviorSubject = new BehaviourSubject(42);
 // New subscribers immediately get the last value
 const result = await toArray(pipe(behaviorSubject.readable, take(1)));
 console.log(result); // [42]
+```
+
+### ReplaySubject<T>
+
+A ReplaySubject is a variant of Subject that "replays" old values to new subscribers by emitting them when they first subscribe. It maintains an internal buffer of previously emitted values that can be configured by buffer size and/or time window.
+
+**Key features:**
+- Buffers emitted values for replay to new subscribers
+- Configurable buffer size (default: Infinity)
+- Configurable time window for buffered values (default: Infinity)
+- Custom timestamp provider support
+- Replays values even after error (unlike BehaviorSubject)
+
+**Constructor:**
+```ts
+new ReplaySubject<T>(bufferSize?: number, windowTime?: number, timestampProvider?: () => number)
+```
+
+**Parameters:**
+- `bufferSize` - Maximum number of values to buffer (default: Infinity)
+- `windowTime` - Time in milliseconds to keep values in buffer (default: Infinity)
+- `timestampProvider` - Function that returns current timestamp (default: Date.now)
+
+**Properties:**
+```ts
+readonly bufferSize: number;        // Current number of buffered values
+readonly maxBufferSize: number;     // Maximum buffer size
+readonly windowTime: number;        // Window time in milliseconds
+```
+
+**Basic usage:**
+
+```ts
+import { ReplaySubject, toArray, pipe, map } from 'web-streams-extensions';
+
+// Create a replay subject with default settings (infinite buffer)
+const subject = new ReplaySubject<number>();
+
+// Emit some values
+await subject.next(1);
+await subject.next(2);
+await subject.next(3);
+
+// New subscribers get all previously emitted values
+const result = await toArray(pipe(subject.readable, take(3)));
+console.log(result); // [1, 2, 3]
+```
+
+**With buffer size limit:**
+
+```ts
+// Only keep last 2 values
+const subject = new ReplaySubject<number>(2);
+
+await subject.next(1);
+await subject.next(2);
+await subject.next(3);
+await subject.next(4);
+
+// New subscriber only gets last 2 values
+const result = await toArray(pipe(subject.readable, take(2)));
+console.log(result); // [3, 4]
+```
+
+**With time window:**
+
+```ts
+// Keep values for 5 seconds
+const subject = new ReplaySubject<number>(Infinity, 5000);
+
+await subject.next(1);
+await sleep(3000);
+await subject.next(2);
+await sleep(3000); // First value is now 6 seconds old
+
+// New subscriber only gets values within time window
+const result = await toArray(pipe(subject.readable, take(1)));
+console.log(result); // [2] - value 1 expired
+```
+
+**Combined buffer size and time window:**
+
+```ts
+// Keep max 3 values, but only for 2 seconds
+const subject = new ReplaySubject<number>(3, 2000);
+
+// Most restrictive constraint applies (whichever removes values first)
+```
+
+**Differences from BehaviorSubject:**
+1. **No initial value required:** ReplaySubject doesn't need a constructor argument
+2. **Multiple values:** Can replay multiple values, not just the last one
+3. **Replay after error:** Unlike BehaviorSubject, ReplaySubject continues to replay buffered values to new subscribers even after an error occurs
+4. **Configurable buffering:** Buffer size and time window can be customized
+
+**Integration with existing Subject functionality:**
+
+```ts
+// Works with all existing Subject features
+const subject = new ReplaySubject<number>();
+
+// Can be used with pipeTo/pipeThrough
+from([1, 2, 3]).pipeTo(subject.writable);
+const result = await toArray(from([4, 5]).pipeThrough(subject));
+// Result includes replayed values: [1, 2, 3, 4, 5]
+
+// Works with operators
+const doubled = await toArray(
+  pipe(subject.readable, map(x => x * 2), take(3))
+);
 ```
 
 ## Error Handling

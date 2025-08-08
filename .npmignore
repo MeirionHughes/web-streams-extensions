@@ -1,10 +1,11 @@
-node_modules/**
-node_modules
-coverage
-.nyc_output
-.mocharc.json
-src
-spec
-yarn.lock
-tsconfig*
-yarn-error.log
+# Exclude everything by default
+*
+
+# Include required files for npm publication
+!dist/
+!package.json
+!README.md
+!CONTRIBUTING.md
+
+# Make sure to include the entire dist directory
+!dist/**/*

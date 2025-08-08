@@ -1,6 +1,6 @@
-import { ISubject } from "./_subject.js";
-import { Subscribable } from "./_subscribable.js";
-import { Subscriber, SubscriptionLike } from "./_subscription.js";
+import { ISubject } from "../_subject.js";
+import { Subscribable } from "../_subscribable.js";
+import { Subscriber, SubscriptionLike } from "../_subscription.js";
 
 /**
  * A Subject is a special type of stream that allows values to be multicast to many observers.

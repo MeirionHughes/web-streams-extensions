@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { toArray, pipe, map, take, toPromise, from } from '../src/index.js';
-import { Subject } from "../src/subject.js";
+import { Subject } from "../src/subjects/subject.js";
 import { Subscribable } from "../src/_subscribable.js";
 
 describe("subscribable", () => {

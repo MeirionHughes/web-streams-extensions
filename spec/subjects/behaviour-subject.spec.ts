@@ -1,8 +1,8 @@
 import { expect } from "chai";
-import { BehaviorSubject } from "../src/behaviour_subject.js";
-import { first } from "../src/operators/first.js";
-import { pipe } from "../src/pipe.js";
-import { toPromise } from "../src/to-promise.js";
+import { BehaviorSubject } from "../../src/subjects/behaviour-subject.js";
+import { first } from "../../src/operators/first.js";
+import { pipe } from "../../src/pipe.js";
+import { toPromise } from "../../src/to-promise.js";
 
 describe("Behavior Subject", function () {
   it("gives initial value", async function () {

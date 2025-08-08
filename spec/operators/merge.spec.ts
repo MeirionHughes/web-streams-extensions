@@ -3,7 +3,7 @@ import { toArray, from, map, pipe, toPromise } from '../../src/index.js';
 import { merge } from "../../src/operators/merge.js";
 import { tap } from "../../src/operators/tap.js";
 import { sleep } from "../../src/utils/sleep.js";
-import { Subject } from "../../src/subject.js";
+import { Subject } from "../../src/subjects/subject.js";
 
 describe("merge", () => {
   it("can merge stream of promises, resolved", async () => {

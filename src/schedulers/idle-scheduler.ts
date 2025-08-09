@@ -10,32 +10,28 @@ import { IScheduler } from "../_scheduler.js";
  * @example
  * ```typescript
  * let scheduler = new IdleScheduler();
- * await scheduler.nextTick(); // Yields to other tasks
+ * scheduler.schedule(() => {
+ *   // Executes during idle time 
+ * });
  * ```
  */
 export class IdleScheduler implements IScheduler {
-  /**
-   * Yields control to allow other tasks to run, using the most appropriate
-   * mechanism for the current environment.
-   * 
-   * @returns A promise that resolves when the scheduler allows continuation
-   */
-  async nextTick(): Promise<void> {
-    return new Promise<void>((resolve) => {
-      // Check for browser environment and requestIdleCallback support
-      if (typeof globalThis !== 'undefined' && 
-          globalThis.requestIdleCallback && 
-          typeof globalThis.requestIdleCallback === 'function') {
-        globalThis.requestIdleCallback(() => resolve());
-      }
-      // Fallback for Node.js and browsers without requestIdleCallback
-      else if (typeof setImmediate !== 'undefined') {
-        setImmediate(() => resolve());
-      }
-      // Final fallback using setTimeout
-      else {
-        setTimeout(() => resolve(), 0);
-      }
-    });
+  declare schedule: (callback: () => void) => void;
+
+  constructor() {
+    // Determine the best scheduling method at construction time
+    if (typeof globalThis !== 'undefined' && 
+        globalThis.requestIdleCallback && 
+        typeof globalThis.requestIdleCallback === 'function') {
+      this.schedule = (callback) => globalThis.requestIdleCallback(callback);
+    }
+    // Fallback for Node.js and browsers without requestIdleCallback
+    else if (typeof setImmediate !== 'undefined') {
+      this.schedule = setImmediate;
+    }
+    // Final fallback using setTimeout
+    else {
+      this.schedule = (callback) => setTimeout(callback, 0);
+    }
   }
 }

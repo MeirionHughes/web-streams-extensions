@@ -67,8 +67,8 @@ export function mergeAll<T>(
           pipe(
             src,
             schedule({
-              nextTick: async () => {
-                await outerGate.wait();
+              schedule: (callback) => {
+                outerGate.wait().then(callback);
               },
             }),
             map((innerStreamOrPromise) => {

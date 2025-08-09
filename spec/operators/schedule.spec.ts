@@ -9,8 +9,11 @@ describe("schedule", () => {
     let wasCalled = 0;
 
     let mockScheduler: IScheduler = {
-      nextTick: async ()=>{wasCalled++;}
-    }
+      schedule: (callback) => {
+        wasCalled++;
+        callback();
+      }
+    };
 
     let result = await toArray(
       pipe(
@@ -51,7 +54,7 @@ describe("schedule", () => {
     }
   });
 
-  it("should throw error for scheduler without nextTick method", async () => {
+  it("should throw error for scheduler without schedule method", async () => {
     const invalidScheduler = {} as IScheduler;
     
     try {
@@ -67,8 +70,8 @@ describe("schedule", () => {
     }
   });
 
-  it("should throw error for scheduler with non-function nextTick", async () => {
-    const invalidScheduler = { nextTick: "not a function" } as any;
+  it("should throw error for scheduler with non-function schedule", async () => {
+    const invalidScheduler = { schedule: "not a function" } as any;
     
     try {
       await toArray(
@@ -86,7 +89,10 @@ describe("schedule", () => {
   it("should handle empty stream", async () => {
     let wasCalled = 0;
     const mockScheduler: IScheduler = {
-      nextTick: async () => { wasCalled++; }
+      schedule: (callback) => { 
+        wasCalled++; 
+        callback();
+      }
     };
 
     const result = await toArray(
@@ -103,7 +109,10 @@ describe("schedule", () => {
   it("should handle single item stream", async () => {
     let wasCalled = 0;
     const mockScheduler: IScheduler = {
-      nextTick: async () => { wasCalled++; }
+      schedule: (callback) => { 
+        wasCalled++; 
+        callback();
+      }
     };
 
     const result = await toArray(
@@ -120,7 +129,7 @@ describe("schedule", () => {
   it("should handle scheduler errors", async () => {
     const errorMessage = "Scheduler error";
     const faultyScheduler: IScheduler = {
-      nextTick: async () => {
+      schedule: (callback) => {
         throw new Error(errorMessage);
       }
     };
@@ -140,7 +149,7 @@ describe("schedule", () => {
 
   it("should handle stream errors", async () => {
     const mockScheduler: IScheduler = {
-      nextTick: async () => { }
+      schedule: (callback) => callback()
     };
 
     const errorStream = new ReadableStream({
@@ -168,9 +177,9 @@ describe("schedule", () => {
     let readerReleased = false;
     
     const mockScheduler: IScheduler = {
-      nextTick: async () => {
-        // Simulate some delay
-        await new Promise(resolve => setTimeout(resolve, 10));
+      schedule: (callback) => {
+        // Simulate async scheduling
+        setTimeout(callback, 10);
       }
     };
 
@@ -208,7 +217,7 @@ describe("schedule", () => {
   it("should handle reader release errors during error cleanup", async () => {
     let errorDuringRelease = false;
     const mockScheduler: IScheduler = {
-      nextTick: async () => {
+      schedule: (callback) => {
         throw new Error("Scheduler error to trigger cleanup");
       }
     };
@@ -239,7 +248,7 @@ describe("schedule", () => {
 
   it("should handle reader release errors during cancel", async () => {
     const mockScheduler: IScheduler = {
-      nextTick: async () => { }
+      schedule: (callback) => callback()
     };
 
     const problematicStream = new ReadableStream({
@@ -270,7 +279,10 @@ describe("schedule", () => {
   it("should work with custom highWaterMark", async () => {
     let wasCalled = 0;
     const mockScheduler: IScheduler = {
-      nextTick: async () => { wasCalled++; }
+      schedule: (callback) => { 
+        wasCalled++; 
+        callback();
+      }
     };
 
     const result = await toArray(
@@ -287,10 +299,10 @@ describe("schedule", () => {
   it("should handle backpressure correctly", async () => {
     let wasCalled = 0;
     const mockScheduler: IScheduler = {
-      nextTick: async () => { 
+      schedule: (callback) => { 
         wasCalled++;
         // Add small delay to simulate real scheduling
-        await new Promise(resolve => setTimeout(resolve, 1));
+        setTimeout(callback, 1);
       }
     };
 
@@ -320,9 +332,9 @@ describe("schedule", () => {
 
   it("should maintain stream order", async () => {
     const mockScheduler: IScheduler = {
-      nextTick: async () => {
+      schedule: (callback) => {
         // Add randomized delay to test ordering
-        await new Promise(resolve => setTimeout(resolve, Math.random() * 5));
+        setTimeout(callback, Math.random() * 5);
       }
     };
 
@@ -339,7 +351,7 @@ describe("schedule", () => {
 
   it("should work with different data types", async () => {
     const mockScheduler: IScheduler = {
-      nextTick: async () => { }
+      schedule: (callback) => callback()
     };
 
     const stringResult = await toArray(

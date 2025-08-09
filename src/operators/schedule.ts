@@ -36,7 +36,10 @@ export function schedule<T>(scheduler: IScheduler): (src: ReadableStream<T>, opt
           return;
         } else {
           try {
-            await scheduler.nextTick();
+            // Use callback-based scheduling for precise timing control
+            await new Promise<void>(resolve => {
+              scheduler.schedule(resolve);
+            });
             controller.enqueue(next.value);
           } catch (err) {
             controller.error(err);
@@ -60,7 +63,7 @@ export function schedule<T>(scheduler: IScheduler): (src: ReadableStream<T>, opt
   }
 
   return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
-    if (!scheduler || typeof scheduler.nextTick !== 'function') {
+    if (!scheduler || typeof scheduler.schedule !== 'function') {
       throw new Error('Invalid scheduler provided to schedule operator');
     }
 

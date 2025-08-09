@@ -227,9 +227,11 @@ describe("throttleTime", () => {
   it("should handle very large throttle duration", async () => {
     const subject = new Subject<number>();
     
+    // Use a large but reasonable duration (1 hour = 3600000ms)
+    // This avoids Node.js timeout overflow warnings while still testing large duration behavior
     const resultPromise = toArray(pipe(
       subject.readable,
-      throttleTime(Number.MAX_SAFE_INTEGER)
+      throttleTime(3600000) // 1 hour
     ));
     
     await subject.next(1); // First value goes through

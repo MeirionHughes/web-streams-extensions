@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { from, pipe, mapSync, toArray } from "../../src/index.js";
+import { from, pipe, mapSync, toArray, throwError } from "../../src/index.js";
 
 describe("mapSync", () => {
   it("should map values synchronously", async () => {
@@ -114,5 +114,74 @@ describe("mapSync", () => {
     ));
     
     expect(result).to.deep.equal(expected);
+  });
+
+  it("should handle stream errors", async () => {
+    try {
+      await toArray(pipe(
+        throwError(new Error("source error")),
+        mapSync(x => x * 2)
+      ));
+      expect.fail("should have thrown");
+    } catch (err) {
+      expect(err.message).to.equal("source error");
+    }
+  });
+
+  it("should handle cancellation properly", async () => {
+    const stream = pipe(
+      from([1, 2, 3, 4, 5]),
+      mapSync(x => x * 2)
+    );
+    
+    const reader = stream.getReader();
+    const { value } = await reader.read();
+    expect(value).to.equal(2);
+    
+    // Cancel the stream
+    await reader.cancel();
+  });
+
+  it("should work with custom highWaterMark", async () => {
+    const mapSyncOp = mapSync((x: number) => x * 2);
+    const result = await toArray(pipe(
+      from([1, 2, 3]),
+      (src) => mapSyncOp(src, { highWaterMark: 1 })
+    ));
+    expect(result).to.deep.equal([2, 4, 6]);
+  });
+
+  it("should handle single value stream", async () => {
+    const result = await toArray(pipe(
+      from([42]),
+      mapSync(x => x * 2)
+    ));
+    expect(result).to.deep.equal([84]);
+  });
+
+  it("should handle reader release errors during error cleanup", async () => {
+    let readerFromOutside;
+    
+    const mockSrc = new ReadableStream({
+      start(controller) {
+        controller.enqueue(1);
+        controller.enqueue(2);
+      }
+    });
+    
+    const stream = pipe(
+      mockSrc,
+      mapSync(x => {
+        if (x === 2) throw new Error("processing error");
+        return x * 2;
+      })
+    );
+    
+    try {
+      await toArray(stream);
+      expect.fail("should have thrown");
+    } catch (err) {
+      expect(err.message).to.equal("processing error");
+    }
   });
 });

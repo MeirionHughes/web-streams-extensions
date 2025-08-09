@@ -132,7 +132,7 @@ console.log('Hot readings processed:', results);
 - `exhaustAll()` - Flatten stream of streams, ignore new while active
 - `mergeAll()` - Flatten stream of streams concurrently
 - `pairwise()` - Emit previous and current values as pairs
-- `delay()` - Delay emissions by specified time
+
 
 ### Filtering Operators
 - `filter()` - Filter values by predicate
@@ -151,6 +151,7 @@ console.log('Hot readings processed:', results);
 - `debounceTime()` - Buffer until quiet period
 - `throttleTime()` - Limit emission rate
 - `timeout()` - Error if no value within duration
+- `delay()` - Delay emissions by specified time
 
 ### Buffering Operators
 - `buffer()` - Buffer into arrays of specified size

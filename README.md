@@ -10,10 +10,6 @@
 A collection of helper methods for WebStreams, inspired by ReactiveExtensions. 
 Being built on-top of ReadableStream, we can have a reactive pipeline with **non-blocking back-pressure built-in**. 
 
-Requires support for ReadableStream ([use a polyfill if not available](https://www.npmjs.com/package/web-streams-polyfill)).
-Subjects require support for WritableStream. 
-Requires support for async/await.
-
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
@@ -26,18 +22,74 @@ npm install web-streams-extensions
 
 ## Usage
 
+### Basic Example
+
 ```typescript
 import { from, pipe, map, filter, toArray } from 'web-streams-extensions';
 
-// Create a stream from an array
+// Create a stream from an array and process it
 const stream = pipe(
   from([1, 2, 3, 4, 5, 6]),
-  filter(x => x % 2 === 0),
-  map(x => x * 2)
+  filter(x => x % 2 === 0),  // Keep even numbers
+  map(x => x * 2)            // Double them
 );
 
 const result = await toArray(stream);
 console.log(result); // [4, 8, 12]
+```
+
+### Real-World Example: Search with Debouncing
+
+```typescript
+import { from, pipe, debounceTime, switchMap, map } from 'web-streams-extensions';
+
+// Simulate user typing in a search box
+const userKeystrokes = from(['h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd']);
+
+const searchResults = pipe(
+  userKeystrokes,
+  debounceTime(300),                         // Wait 300ms after user stops typing
+  map(chars => chars.join('')),              // Join characters into search term
+  filter(term => term.length > 2),           // Only search for terms longer than 2 chars
+  switchMap((term, index, signal) =>         // Cancel previous search when new term arrives
+    fetch(`/api/search?q=${term}`, { signal }) // Pass AbortSignal to fetch for cancellation
+      .then(response => response.json())
+      .then(data => from(data.results))
+  )
+);
+
+// Subscribe to search results
+subscribe(searchResults, 
+  result => console.log('Search result:', result),
+  () => console.log('Search completed'),
+  error => console.error('Search error:', error)
+);
+```
+
+### Reactive Data Processing Pipeline
+
+```typescript
+import { interval, pipe, map, filter, buffer, scan } from 'web-streams-extensions';
+
+// Simulate sensor data every 100ms
+const sensorStream = pipe(
+  interval(100),
+  map(() => ({ 
+    temperature: 20 + Math.random() * 10, 
+    timestamp: Date.now() 
+  })),
+  filter(reading => reading.temperature > 25),  // Filter hot readings
+  buffer(5),                                    // Group into batches of 5
+  map(batch => ({                               // Calculate batch statistics
+    avgTemp: batch.reduce((sum, r) => sum + r.temperature, 0) / batch.length,
+    count: batch.length,
+    timespan: batch[batch.length - 1].timestamp - batch[0].timestamp
+  })),
+  scan((total, batch) => total + batch.count, 0) // Keep running total
+);
+
+const results = await toArray(pipe(sensorStream, take(3)));
+console.log('Hot readings processed:', results);
 ```
 
 ## API Reference Quick Index
@@ -50,7 +102,7 @@ console.log(result); // [4, 8, 12]
 - `timer()` - Create stream that emits after delay, optionally with interval
 - `range()` - Create stream that emits sequence of numbers
 - `interval()` - Create stream that emits numbers at intervals
-- `concatenated()` - Concatenate multiple streams sequentially
+- `concat()` - Concatenate multiple streams sequentially
 - `zip()` - Combine multiple streams with optional selector functions
 - `combineLatest()` - Combine latest values from multiple streams
 - `race()` - Emit from first source stream to emit
@@ -103,8 +155,10 @@ console.log(result); // [4, 8, 12]
 - `startWith()` - Prepend values to stream
 
 ### Combination Operators
-- `concat()` - Flatten stream of streams sequentially
-- `merge()` - Flatten stream of streams with concurrency control
+- `concatAll()` - Flatten stream of streams sequentially
+- `mergeAll()` - Flatten stream of streams concurrently
+- `switchAll()` - Switch to latest inner stream
+- `exhaustAll()` - Ignore new inner streams while current is active
 - `mergeMap()` - Map each value to a stream and flatten with concurrency control
 
 ### Utility Operators
@@ -151,19 +205,36 @@ of(1, "foo", () => "bar", {})
 // Emits: 1, "foo", () => "bar", {}
 ```
 
-### interval(duration: number): ReadableStream<number>
+### interval(duration: number): ReadableStream\<number>
 
-Creates a ReadableStream that emits incremental numbers at specified intervals.
+Creates a ReadableStream that emits incremental numbers at specified intervals, starting immediately.
+
+**Deterministic behavior:**
+- **First emission**: Always emits `0` immediately (no delay)
+- **Subsequent emissions**: Emits `1, 2, 3, ...` every `duration` milliseconds
+- **Infinite stream**: Continues emitting until cancelled or an error occurs
+- **Timing**: Uses `setInterval` internally for consistent timing
 
 ```ts
-pipe(
+// Emit every second starting immediately
+const counter = pipe(
   interval(1000), // Emits 0, 1, 2, 3... every second
   take(5)
-)
-// Result: [0, 1, 2, 3, 4] over 5 seconds
+);
+const result = await toArray(counter);
+// Timeline: 0ms→0, 1000ms→1, 2000ms→2, 3000ms→3, 4000ms→4
+// Result: [0, 1, 2, 3, 4]
+
+// Fast interval for real-time updates
+const heartbeat = pipe(
+  interval(16), // ~60fps (16.67ms intervals)
+  map(frame => ({ frame, timestamp: Date.now() })),
+  take(3)
+);
+// Useful for animations or real-time monitoring
 ```
 
-### concatenated\<T>(...streams: ReadableStream\<T>[]): ReadableStream\<T>
+### concat\<T>(...streams: ReadableStream\<T>[]): ReadableStream\<T>
 
 Concatenates several streams together in the order given. Each stream is read to completion before moving to the next.
 
@@ -173,10 +244,10 @@ It will not read from the streams until the result stream is read from (lazy eva
 let inputA = [1, 2];
 let inputB = [3, 4];
 let expected = [1, 2, 3, 4];
-let stream = concatenated(from(inputA), from(inputB));
+let stream = concat(from(inputA), from(inputB));
 let result = await toArray(stream);
 
-### zip(...sources: ReadableStream<T>[], selector?: Function): ReadableStream
+### zip(...sources: ReadableStream\<T>[], selector?: Function): ReadableStream
 
 Combines multiple streams by pairing up values from each stream. Supports heterogeneous types and optional selector functions for transformation.
 
@@ -259,31 +330,51 @@ try {
 
 ### timer(dueTime: number, interval?: number): ReadableStream\<number>
 
-Creates a ReadableStream that emits after the specified delay. If an interval is provided, continues emitting incrementally.
+Creates a ReadableStream that emits after the specified delay. If an interval is provided, continues emitting incrementally at that interval.
+
+**Deterministic behavior:**
+- **Single emission**: With only `dueTime`, emits `0` after the specified delay then completes
+- **Interval emissions**: With both `dueTime` and `interval`, emits `0, 1, 2, ...` starting after `dueTime`, then every `interval` milliseconds
+- **Values**: Always emits incrementing integers starting from 0
 
 ```ts
 // Single emission after delay
 const result = await toArray(timer(1000));
-// Result: [0] (after 1 second)
+// After 1000ms: [0]
 
-// Emit every interval after initial delay
-const result = await toArray(pipe(timer(500, 1000), take(3)));
-// Result: [0, 1, 2] (first at 500ms, then every 1000ms)
+// Interval emissions: first after 500ms, then every 1000ms
+const result = await toArray(pipe(timer(500, 1000), take(4)));
+// Timeline: 500ms→0, 1500ms→1, 2500ms→2, 3500ms→3
+// Result: [0, 1, 2, 3]
+
+// Immediate timer (0ms delay)
+const result = await toArray(pipe(timer(0, 100), take(3)));
+// Emits immediately, then every 100ms: [0, 1, 2]
 ```
 
 ### range(start: number, count: number): ReadableStream\<number>
 
-Creates a ReadableStream that emits a sequence of numbers within a specified range.
+Creates a ReadableStream that emits a consecutive sequence of numbers.
+
+**Deterministic behavior:**
+- **Start value**: First number emitted is always `start`
+- **Count**: Exactly `count` numbers are emitted
+- **Sequence**: Numbers increment by 1: `start, start+1, start+2, ..., start+count-1`
+- **Empty range**: If `count` is 0, no values are emitted and stream completes immediately
 
 ```ts
-const result = await toArray(range(1, 5));
-// Result: [1, 2, 3, 4, 5]
+const result = await toArray(range(5, 4));
+// Result: [5, 6, 7, 8] - starts at 5, emits 4 numbers
 
-const result2 = await toArray(range(10, 3));
-// Result: [10, 11, 12]
+const result2 = await toArray(range(0, 3));
+// Result: [0, 1, 2] - starts at 0, emits 3 numbers
 
-const empty = await toArray(range(0, 0));
-// Result: []
+const empty = await toArray(range(100, 0));
+// Result: [] - count is 0, so no emissions
+
+// Negative numbers work too
+const negative = await toArray(range(-3, 3));
+// Result: [-3, -2, -1]
 ```
 
 ### combineLatest\<T>(...sources: ReadableStream\<T>[]): ReadableStream\<T[]>
@@ -417,7 +508,7 @@ i.e. they do not cache or store values within the opmaker scope. This means that
 
 ## Creation Functions
 
-### empty(): ReadableStream<never>
+### empty(): ReadableStream\<never>
 
 Creates a stream that completes immediately without emitting any values.
 
@@ -426,7 +517,7 @@ let result = await toArray(empty());
 // Result: []
 ```
 
-### throwError(error: any): ReadableStream<never>
+### throwError(error: any): ReadableStream\<never>
 
 Creates a stream that immediately emits an error.
 
@@ -438,7 +529,7 @@ try {
 }
 ```
 
-### timer(delay: number, interval?: number): ReadableStream<number>
+### timer(delay: number, interval?: number): ReadableStream\<number>
 
 Creates a stream that emits after a delay, optionally repeating at intervals.
 
@@ -452,7 +543,7 @@ let result = await toArray(pipe(timer(1000, 500), take(3)));
 // Result: [0, 1, 2]
 ```
 
-### range(start: number, count: number): ReadableStream<number>
+### range(start: number, count: number): ReadableStream\<number>
 
 Creates a stream that emits a sequence of numbers in a range.
 
@@ -461,7 +552,7 @@ let result = await toArray(range(5, 3));
 // Result: [5, 6, 7]
 ```
 
-### combineLatest<T>(sources: ReadableStream<T>[], project?: (...values: T[]) => R): ReadableStream<T[] | R>
+### combineLatest\<T>(sources: ReadableStream\<T>[], project?: (...values: T[]) => R): ReadableStream\<T[] | R>
 
 Combines the latest values from multiple streams, emitting whenever any source emits.
 
@@ -473,7 +564,7 @@ let result = await toArray(combineLatest([numbers, letters]));
 // Result: [[1, 'a'], [2, 'b'], [3, 'c']]
 ```
 
-### race<T>(...sources: ReadableStream<T>[]): ReadableStream<T>
+### race\<T>(...sources: ReadableStream\<T>[]): ReadableStream\<T>
 
 Returns a stream that mirrors the first source stream to emit a value.
 
@@ -545,12 +636,30 @@ let result = await toArray(
 // Result: [10]
 ```
 
-#### switchMap\<T, R>(project: (value: T, index: number) => ReadableStream<R>): Op\<T, R>
+#### switchMap\<T, R>(project: (value: T, index: number, signal?: AbortSignal) => ReadableStream<R>): Op\<T, R>
 
-Maps each source value to a stream and flattens them, but only the most recent inner stream. When a new inner stream is created, the previous one is cancelled.
+Maps each source value to a stream and flattens them, but only the most recent inner stream emits values. When a new source value arrives, the previous inner stream is cancelled and a new one is created from the projection function. The optional `AbortSignal` parameter allows the projection function to properly cancel ongoing operations like HTTP requests.
+
+**Deterministic behavior:**
+- **Synchronous source and inner streams**: Only partial values from earlier projections may emit before being cancelled
+- **Async projections**: Timing determines which values are emitted before cancellation
+- **Last projection**: Always completes fully since there's no subsequent value to cancel it
 
 ```ts
-// Simulate user typing with debounced search requests
+// Synchronous source with synchronous projections
+let result = await toArray(
+  pipe(
+    from([1, 2, 3]),
+    switchMap(n => from([n, n * 2, n * 3]))
+  )
+);
+// Result: [1, 2, 3, 6, 9] - partial results from each projection
+// Breakdown:
+//   n=1: emits [1] then cancelled by n=2
+//   n=2: emits [2] then cancelled by n=3  
+//   n=3: emits [3, 6, 9] completely (no cancellation)
+
+// Simulating user typing with debounced search requests
 let searchTerms = from(['a', 'ab', 'abc']);
 let result = await toArray(
   pipe(
@@ -561,13 +670,49 @@ let result = await toArray(
     )
   )
 );
-// Result: ['abc-result1', 'abc-result2', 'abc-result3']
-// Earlier searches for 'a' and 'ab' are cancelled when 'abc' starts
+// Result: ['a-result1', 'ab-result1', 'abc-result1', 'abc-result2', 'abc-result3']
+// Earlier searches for 'a' and 'ab' are cancelled when newer terms arrive
+
+// Practical HTTP example with real cancellation
+const searchResults = pipe(
+  userInputDebounced,                         // Stream of search terms
+  switchMap((term, index, signal) =>         // AbortSignal for proper cancellation
+    fetch(`/api/search?q=${term}`, { signal }) // Pass signal to fetch for cancellation
+      .then(response => response.json())      // Parse JSON response
+      .then(data => from(data.results))       // Convert to stream of results
+  )
+);
+// Previous HTTP requests are automatically cancelled when user types new search terms
+
+// Custom cancellable operations using AbortSignal
+const cancellableOperations = pipe(
+  userActions,
+  switchMap((action, index, signal) => {
+    return new ReadableStream({
+      start(controller) {
+        // Set up a long-running operation
+        const timeoutId = setTimeout(() => {
+          if (!signal?.aborted) {
+            controller.enqueue(`result-${action}`);
+            controller.close();
+          }
+        }, 1000);
+        
+        // Handle cancellation
+        signal?.addEventListener('abort', () => {
+          clearTimeout(timeoutId);
+          controller.close();
+        });
+      }
+    });
+  })
+);
+// Previous operations are automatically cancelled when new actions arrive
 ```
 
-#### concatMap\<T, R>(project: (value: T, index: number) => ReadableStream<R> | Promise<R> | ArrayLike<R>): Op\<T, R>
+#### concatMap\<T, R>(project: (value: T, index: number) => ReadableStream\<R> | Promise\<R> | Iterable\<R> | AsyncIterable\<R>): Op\<T, R>
 
-Maps each source value to a stream, promise, or array and concatenates them sequentially. Each inner stream completes before the next one starts.
+Maps each source value to a stream, promise, iterable, or async iterable and concatenates them sequentially. Each inner stream completes before the next one starts.
 
 ```ts
 let result = await toArray(
@@ -586,9 +731,33 @@ let result2 = await toArray(
   )
 );
 // Result: [2, 4]
+
+// Works with iterables
+let result3 = await toArray(
+  pipe(
+    from([1, 2, 3]),
+    concatMap(n => [n, n * 10]) // Array is an iterable
+  )
+);
+// Result: [1, 10, 2, 20, 3, 30]
+
+// Works with custom iterables
+let result4 = await toArray(
+  pipe(
+    from([1, 2]),
+    concatMap(n => ({
+      *[Symbol.iterator]() {
+        yield n;
+        yield n * 2;
+        yield n * 3;
+      }
+    }))
+  )
+);
+// Result: [1, 2, 3, 2, 4, 6]
 ```
 
-#### exhaustMap\<T, R>(project: (value: T, index: number) => ReadableStream<R> | Promise<R> | ArrayLike<R>): Op\<T, R>
+#### exhaustMap\<T, R>(project: (value: T, index: number) => ReadableStream\<R> | Promise\<R> | Iterable\<R> | AsyncIterable\<R>): Op\<T, R>
 
 Maps each source value to a stream, but ignores new source values while the current inner stream is still active.
 
@@ -603,11 +772,12 @@ let result = await toArray(
 // Result: [1, 10] (2 and 3 are ignored while first stream is active)
 ```
 
-#### concatAll\<T>(): Op<ReadableStream<T>, T>
+#### concatAll\<T>(): Op\<ReadableStream\<T> | Promise\<T> | Iterable\<T> | AsyncIterable\<T>, T>
 
-Flattens a stream of streams by concatenating them sequentially. Each inner stream completes before the next one starts.
+Flattens a stream of streams, promises, iterables, or async iterables by concatenating them sequentially. Each inner source completes before the next one starts.
 
 ```ts
+// With ReadableStreams
 let result = await toArray(
   pipe(
     from([
@@ -619,13 +789,39 @@ let result = await toArray(
   )
 );
 // Result: [1, 2, 3, 4, 5, 6]
+
+// With arrays (iterables)
+let result2 = await toArray(
+  pipe(
+    from([
+      [1, 2],
+      [3, 4], 
+      [5, 6]
+    ]),
+    concatAll()
+  )
+);
+// Result: [1, 2, 3, 4, 5, 6]
+
+// With promises
+let result3 = await toArray(
+  pipe(
+    from([
+      Promise.resolve([1, 2]),
+      Promise.resolve([3, 4])
+    ]),
+    concatAll()
+  )
+);
+// Result: [1, 2, 3, 4]
 ```
 
-#### mergeAll\<T>(concurrent?: number): Op<ReadableStream<T>, T>
+#### mergeAll\<T>(concurrent?: number): Op\<ReadableStream\<T> | Promise\<T> | Iterable\<T> | AsyncIterable\<T>, T>
 
-Flattens a stream of streams by merging them concurrently with optional concurrency control.
+Flattens a stream of streams, promises, iterables, or async iterables by merging them concurrently with optional concurrency control.
 
 ```ts
+// With ReadableStreams
 let result = await toArray(
   pipe(
     from([
@@ -636,23 +832,121 @@ let result = await toArray(
   )
 );
 // Result: [1, 2, 3, 4] (order may vary due to concurrency)
+
+// With arrays (iterables)
+let result2 = await toArray(
+  pipe(
+    from([
+      [1, 2],
+      [3, 4]
+    ]),
+    mergeAll()
+  )
+);
+// Result: [1, 2, 3, 4] (order may vary due to concurrency)
+
+// With mixed types and concurrency limit
+let result3 = await toArray(
+  pipe(
+    from([
+      Promise.resolve([1, 2]),
+      [3, 4],
+      from([5, 6])
+    ]),
+    mergeAll(2) // Max 2 concurrent inner sources
+  )
+);
+// Result: [1, 2, 3, 4, 5, 6] (order may vary due to concurrency)
 ```
 
-#### switchAll\<T>(): Op<ReadableStream<T>, T>
+#### switchAll\<T>(): Op\<ReadableStream\<T>, T>
 
-Flattens a stream of streams by switching to each new inner stream, cancelling the previous one.
+Flattens a stream of streams by switching to each new inner stream, cancelling the previous one. When a new inner stream arrives, the previous inner stream is immediately cancelled and the new one takes over.
+
+**Deterministic behavior:**
+- **Synchronous streams**: When the source stream emits synchronous inner streams rapidly, only the final stream emits its complete values
+- **Asynchronous streams**: Earlier streams are cancelled when newer ones arrive, but some values may be emitted before cancellation
+- **Empty streams**: If the source stream is empty, the output stream completes immediately
 
 ```ts
+// Synchronous streams - only last stream emits
 let result = await toArray(
   pipe(
     from([
-      from([1, 2]),
-      from([3, 4])
+      from([1, 2]),      // Cancelled immediately
+      from([3, 4]),      // Cancelled immediately  
+      from([5, 6])       // Completes normally
     ]),
     switchAll()
   )
 );
-// Result: [3, 4] (first stream cancelled when second arrives)
+// Result: [5, 6] - previous streams cancelled before emitting
+
+// Asynchronous streams with timing
+let result = await toArray(
+  pipe(
+    from([
+      timer(100).pipe(map(() => 'first')),   // May emit before cancellation
+      timer(50).pipe(map(() => 'second')),   // May emit before cancellation
+      timer(25).pipe(map(() => 'third'))     // Completes first
+    ]),
+    switchAll()
+  )
+);
+// Result: ['third'] - fastest stream wins
+
+// Practical example: search cancellation
+const searchStream = pipe(
+  userSearchInputs,                    // Stream of search terms
+  map(term => fetchSearchResults(term)), // Each term -> HTTP request stream
+  switchAll()                          // Cancel previous search when new term arrives
+);
+// Only the most recent search completes, previous searches are cancelled
+```
+
+#### exhaustAll\<T>(): Op<ReadableStream\<T> | Promise\<T> | Iterable\<T> | AsyncIterable\<T>, T>
+
+Flattens a stream of streams, promises, iterables, or async iterables by ignoring new inner sources while the current one is still active. When a new inner source arrives while one is already being processed, it is discarded. This is the opposite of `switchAll` - instead of cancelling the current stream, it ignores new ones.
+
+**Deterministic behavior:**
+- **First inner source**: Always processed completely
+- **Subsequent sources**: Ignored if an inner source is currently active
+- **After completion**: Once an inner source completes, the next available source (if any) is processed
+
+```ts
+// Synchronous sources - first source wins, others ignored
+let result = await toArray(
+  pipe(
+    from([
+      [1, 2, 3],      // Processed completely
+      [4, 5, 6],      // Ignored (first still active)
+      [7, 8, 9]       // Ignored (first still active)
+    ]),
+    exhaustAll()
+  )
+);
+// Result: [1, 2, 3] - only first array is processed
+
+// Asynchronous sources with timing
+let result2 = await toArray(
+  pipe(
+    from([
+      timer(50).pipe(map(() => 'first')),    // Fast, gets processed
+      timer(100).pipe(map(() => 'second')),  // Ignored (first still active)
+      timer(200).pipe(map(() => 'third'))    // Processed after first completes
+    ]),
+    exhaustAll()
+  )
+);
+// Result: ['first', 'third'] - second is ignored
+
+// Practical example: Preventing duplicate form submissions
+const formSubmissions = pipe(
+  userClickEvents,                    // Stream of button clicks
+  map(click => submitFormToAPI(click)), // Each click -> HTTP request
+  exhaustAll()                        // Ignore clicks while request is pending
+);
+// Prevents multiple simultaneous form submissions
 ```
 
 #### pairwise\<T>(): Op\<T, [T, T]>
@@ -758,7 +1052,7 @@ let result = await toArray(
 // Result: [1, 2, 3]
 ```
 
-#### takeUntil\<T>(notifier: ReadableStream<any>): Op\<T, T>
+#### takeUntil\<T>(notifier: ReadableStream\<any>): Op\<T, T>
 
 Takes values from the source until the notifier stream emits a value. When the notifier emits, the source stream is cancelled and the output completes.
 
@@ -859,12 +1153,29 @@ let result = await toArray(
 
 #### debounceTime\<T>(duration: number): Op\<T, T[]>
 
-Buffers elements until a duration of time has passed since the last chunk, then emits the buffer.
+Buffers elements until a duration of time has passed since the last chunk, then emits the buffer. This is useful for scenarios like search input where you want to wait for the user to stop typing before processing.
+
+**Deterministic behavior:**
+- Starts a timer after each emission
+- If another value arrives before the timer expires, the timer resets and the buffer grows
+- When the timer finally expires, all buffered values are emitted as an array
+- On stream completion, any remaining buffered values are emitted immediately
 
 ```ts
-let stream = pipe(
-  from(rapidValueStream),
-  debounceTime(1000) // Wait 1 second after last value
+// Simulate rapid user input with pauses
+const userInputs = from(['h', 'e', 'l', 'l', 'o']); // Rapid typing
+const debounced = pipe(
+  userInputs,
+  debounceTime(300) // Wait 300ms after last input
+);
+// Result: [['h', 'e', 'l', 'l', 'o']] - all inputs bundled together
+
+// Real-world search example
+const searchInput = pipe(
+  keystrokes,
+  debounceTime(500), // Wait 500ms after user stops typing
+  map(chars => chars.join('')), // Join characters into search term
+  switchMap((term, index, signal) => fetch(`/api/search?q=${term}`, { signal })) // Search when typing stops
 );
 ```
 
@@ -872,15 +1183,30 @@ let stream = pipe(
 
 Limits the rate of emissions to at most one per specified time period. The first value is emitted immediately, then subsequent values are ignored until the time period expires.
 
+**Deterministic behavior:**
+- **First value**: Always emitted immediately
+- **Subsequent values**: Ignored until `duration` milliseconds have passed since the last emission
+- **Throttle state**: Maintains a "leading edge" behavior - emits at the start of each time window
+
 ```ts
+// Throttle rapid button clicks
+const buttonClicks = interval(100); // Click every 100ms
 let result = await toArray(
   pipe(
-    interval(100), // Emits every 100ms
-    throttleTime(300), // Only emit every 300ms
+    buttonClicks,
+    throttleTime(300), // Only allow one click per 300ms
     take(5)
   )
 );
-// Will emit values at 0ms, 300ms, 600ms, etc.
+// Timeline: emit at 0ms, ignore at 100ms & 200ms, emit at 300ms, etc.
+// Result: [0, 3, 6, 9, 12] - values emitted at 300ms intervals
+
+// Practical example: API rate limiting
+const apiRequests = pipe(
+  userActions,
+  throttleTime(1000), // Max 1 request per second
+  switchMap((action, index, signal) => callAPI(action, signal))
+);
 ```
 
 #### timeout\<T>(duration: number): Op\<T, T>
@@ -896,7 +1222,7 @@ let stream = pipe(
 
 ### Buffering Operators
 
-#### buffer\<T>(count: number): Op<T, T[]>
+#### buffer\<T>(count: number): Op\<T, T[]>
 
 Buffers elements and emits them as arrays when the buffer reaches the specified count. The final buffer (if not empty) is emitted when the source stream completes.
 
@@ -926,7 +1252,7 @@ let result = await toArray(
 
 ### Combination Operators
 
-#### concat\<T>(): Op<ReadableStream\<T>, T>
+#### concat\<T>(): Op\<ReadableStream\<T>, T>
 
 Given a ReadableStream of ReadableStreams, concatenates the output of each stream in sequence.
 
@@ -941,24 +1267,9 @@ let result = await toArray(
 // Result: [1, 2, 3, 4, 5]
 ```
 
-#### merge<T>(concurrent?: number): Op<ReadableStream<T> | Promise<T>, T>
+#### mergeMap\<T, R>(project: (value: T, index: number) => ReadableStream\<R> | Promise\<R> | Iterable\<R> | AsyncIterable\<R>, concurrent?: number): Op\<T, R>
 
-Merges a stream of streams (or promises) into a single flattened stream, with optional concurrency control. Each inner stream is subscribed to and their values are merged into the output stream.
-
-```ts
-let streams = [from([1, 2]), from([3, 4]), Promise.resolve(5)];
-let result = await toArray(
-  pipe(
-    from(streams),
-    merge(2) // Process max 2 streams at once
-  )
-);
-// Result: [1, 2, 3, 4, 5] (order may vary based on timing)
-```
-
-#### mergeMap<T, R>(project: (value: T, index: number) => ReadableStream<R> | Promise<R> | ArrayLike<R>, concurrent?: number): Op<T, R>
-
-Maps each source value to a ReadableStream, Promise, or array, then flattens all inner streams into a single output stream with optional concurrency control.
+Maps each source value to a ReadableStream, Promise, iterable, or async iterable, then flattens all inner streams into a single output stream with optional concurrency control.
 
 ```ts
 // Map each number to a stream of that many values
@@ -970,8 +1281,17 @@ let result = await toArray(
 );
 // Result: [1, 2, 2, 3, 3, 3] (order may vary due to concurrency)
 
+// Works with iterables (arrays are iterables)
+let result2 = await toArray(
+  pipe(
+    from([1, 2, 3]),
+    mergeMap(n => Array(n).fill(n)) // Array as iterable
+  )
+);
+// Result: [1, 2, 2, 3, 3, 3] (order may vary due to concurrency)
+
 // With limited concurrency for HTTP requests
-let result = await toArray(
+let result3 = await toArray(
   pipe(
     from([1, 2, 3, 4]),
     mergeMap(id => fetch(`/api/data/${id}`).then(r => r.json()), 2)
@@ -980,7 +1300,39 @@ let result = await toArray(
 // Only 2 concurrent requests at a time
 ```
 
-#### withLatestFrom<T, U, R>(other: ReadableStream<U>, combiner?: (value: T, otherValue: U) => R): Op<T, R | [T, U]>
+#### exhaustAll\<T>(): Op\<ReadableStream\<T> | Promise\<T> | Iterable\<T> | AsyncIterable\<T>, T>
+
+Flattens a stream of streams, promises, iterables, or async iterables by ignoring new inner sources while the current one is still active. This provides an "exhaust" strategy where new sources are dropped if one is already being processed.
+
+```ts
+// With ReadableStreams - first stream wins
+let result = await toArray(
+  pipe(
+    from([
+      from([1, 2, 3]),
+      from([4, 5, 6]),
+      from([7, 8, 9])
+    ]),
+    exhaustAll()
+  )
+);
+// Result: [1, 2, 3] - subsequent streams are ignored
+
+// With mixed types
+let result2 = await toArray(
+  pipe(
+    from([
+      [1, 2],                    // Processed
+      Promise.resolve([3, 4]),   // Ignored (first still active)
+      [5, 6]                     // Processed after first completes
+    ]),
+    exhaustAll()
+  )
+);
+// Result: [1, 2, 5, 6] - promise is ignored
+```
+
+#### withLatestFrom\<T, U, R>(other: ReadableStream\<U>, combiner?: (value: T, otherValue: U) => R): Op\<T, R | [T, U]>
 
 Combines each emission from the source stream with the latest value from another stream. Only emits when the source emits, using the most recent value from the other stream.
 
@@ -997,7 +1349,7 @@ let result = await toArray(
 // Result: [[1, 'a'], [2, 'b'], [3, 'c']]
 ```
 
-#### pairwise<T>(): Op<T, [T, T]>
+#### pairwise\<T>(): Op\<T, [T, T]>
 
 Emits the previous and current value as a pair. Skips the first emission since there's no previous value.
 
@@ -1013,7 +1365,7 @@ let result = await toArray(
 
 ### Utility Operators
 
-#### tap<T>(cb: (chunk: T) => void | Promise<void>): Op<T, T>
+#### tap\<T>(cb: (chunk: T) => void | Promise): Op\<T, T>
 
 Allows observing each chunk without modifying the stream. The output is exactly the same as the input.
 
@@ -1028,7 +1380,7 @@ let result = await toArray(
 // Result: [1, 2, 3, 4], sideEffects: [2, 4, 6, 8]
 ```
 
-#### on<T>(callbacks: { start?(): void; complete?(): void; error?(err: any): void }): Op<T, T>
+#### on\<T>(callbacks: { start?(): void; complete?(): void; error?(err: any): void }): Op\<T, T>
 
 Creates an operator that allows attaching lifecycle callbacks to a stream. Useful for side effects like logging, cleanup, or state management without modifying the stream's data flow.
 
@@ -1045,7 +1397,7 @@ let result = await toArray(
 );
 ```
 
-#### catchError<T>(selector: (error: any, caught: ReadableStream<T>) => ReadableStream<T>): Op<T, T>
+#### catchError\<T>(selector: (error: any, caught: ReadableStream\<T>) => ReadableStream\<T>): Op\<T, T>
 
 Catches errors from the source stream and switches to a fallback stream.
 
@@ -1059,7 +1411,7 @@ let result = await toArray(
 // If errorProneStream errors, switches to emit 'fallback', 'values'
 ```
 
-#### schedule<T>(scheduler: Scheduler): Op<T, T>
+#### schedule\<T>(scheduler: Scheduler): Op\<T, T>
 
 Schedules the emission of values using a custom scheduler.
 
@@ -1074,7 +1426,7 @@ let result = await toArray(
 );
 ```
 
-#### through<T, R>(transform: TransformStream<T, R>): Op<T, R>
+#### through\<T, R>(transform: TransformStream\<T, R>): Op\<T, R>
 
 Pipes the stream through a TransformStream, allowing integration with native Web Streams API transforms.
 
@@ -1087,7 +1439,7 @@ let result = await toArray(
 );
 ```
 
-#### defaultIfEmpty<T>(defaultValue: T): Op<T, T>
+#### defaultIfEmpty\<T>(defaultValue: T): Op\<T, T>
 
 Emits a default value if the source stream completes without emitting any values.
 
@@ -1101,7 +1453,7 @@ let result = await toArray(
 // Result: ['default']
 ```
 
-#### count<T>(predicate?: (value: T) => boolean): Op<T, number>
+#### count\<T>(predicate?: (value: T) => boolean): Op\<T, number>
 
 Counts the number of emissions from the source stream. If a predicate is provided, only counts emissions that satisfy the predicate.
 
@@ -1232,7 +1584,7 @@ let result = await toArray(from(input).pipeThrough(subject));
 expect(result).to.be.deep.eq(expected); // [1,2,3,4]
 ```
 
-### BehaviourSubject<T>
+### BehaviourSubject\<T>
 
 A BehaviourSubject is like a Subject but remembers the last emitted value and immediately emits it to new subscribers.
 
@@ -1244,7 +1596,7 @@ const result = await toArray(pipe(behaviorSubject.readable, take(1)));
 console.log(result); // [42]
 ```
 
-### ReplaySubject<T>
+### ReplaySubject\<T>
 
 A ReplaySubject is a variant of Subject that "replays" old values to new subscribers by emitting them when they first subscribe. It maintains an internal buffer of previously emitted values that can be configured by buffer size and/or time window.
 
@@ -1356,39 +1708,188 @@ const doubled = await toArray(
 
 ## Error Handling
 
-All operators and functions include proper error handling with resource cleanup:
+All operators and functions include proper error handling with automatic resource cleanup. When an error occurs anywhere in a stream pipeline, all resources (readers, timers, etc.) are automatically cleaned up.
+
+### Basic Error Handling
 
 ```ts
 try {
   const result = await toArray(
     pipe(
-      from(mightThrowSource),
-      map(x => x.riskyOperation()),
+      from([1, 2, 3, 4]),
+      map(x => {
+        if (x === 3) throw new Error('Value 3 not allowed');
+        return x * 2;
+      }),
       timeout(5000)
     )
   );
 } catch (error) {
-  console.error('Stream error:', error);
+  console.error('Stream error:', error.message); // "Value 3 not allowed"
   // All resources are automatically cleaned up
+}
+```
+
+### Error Recovery with catchError
+
+```ts
+const resilientStream = pipe(
+  from([1, 2, 3, 4]),
+  map(x => {
+    if (x === 3) throw new Error('Temporary failure');
+    return x * 2;
+  }),
+  catchError(error => {
+    console.log('Caught error:', error.message);
+    return from(['fallback-value']); // Continue with fallback stream
+  })
+);
+
+const result = await toArray(resilientStream);
+// Result: [2, 4, 'fallback-value', 8]
+// Processing continues after error with fallback values
+```
+
+### Error Handling in Async Operations
+
+```ts
+const apiStream = pipe(
+  from(['url1', 'url2', 'invalid-url', 'url3']),
+  map(async url => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }),
+  catchError(error => {
+    console.log('API call failed:', error.message);
+    return from([{ error: 'Failed to fetch data' }]);
+  })
+);
+
+// Stream continues processing valid URLs even if some fail
+```
+
+### Resource Cleanup Guarantees
+
+The library ensures that all resources are properly cleaned up even when errors occur:
+
+- **Readers**: Automatically released and cancelled
+- **Timers**: Cleared and cancelled (`setTimeout`, `setInterval`)
+- **HTTP requests**: Aborted when streams are cancelled
+- **Memory**: Buffers and queues are cleared
+
+```ts
+const streamWithResources = pipe(
+  interval(100),                    // Creates internal timer
+  mergeMap(i => fetch(`/api/${i}`)), // Creates HTTP requests
+  buffer(5),                        // Creates internal buffer
+  timeout(1000)                     // Creates timeout timer
+);
+
+try {
+  await toArray(pipe(streamWithResources, take(2)));
+} catch (error) {
+  // If timeout or other error occurs:
+  // - interval timer is cleared
+  // - HTTP requests are aborted  
+  // - buffer is cleared
+  // - timeout timer is cleared
+  console.log('All resources cleaned up automatically');
 }
 ```
 
 ## Backpressure
 
-The library properly handles backpressure throughout the pipeline:
+The library implements proper backpressure handling throughout the pipeline, automatically slowing down fast producers when consumers can't keep up. This prevents memory buildup and ensures stable performance.
+
+### How Backpressure Works
+
+Backpressure is achieved by:
+1. **Controller.desiredSize**: Operators check this to know when to pause production
+2. **Pull-based reading**: Operators wait for 'pull' calls before producing more values
+3. **Buffer limits**: Configurable `highWaterMark` controls internal buffering
+
+### Automatic Backpressure Example
 
 ```ts
-// Slow consumer will naturally backpressure the fast producer
-const slowStream = pipe(
-  from(fastProducer()),
+// Fast producer with slow consumer - backpressure automatically applies
+const fastProducer = interval(10);  // Emits every 10ms
+const slowConsumer = pipe(
+  fastProducer,
   map(async x => {
-    await sleep(100); // Slow async operation
-    return x;
-  })
+    await sleep(100);  // Slow async operation (100ms per item)
+    return x * 2;
+  }),
+  take(5)
+);
+
+// The interval will automatically slow down to match the map operator's pace
+// No memory buildup occurs - the producer waits for the consumer
+const result = await toArray(slowConsumer);
+// Takes ~500ms total (5 items × 100ms each) instead of ~50ms without backpressure
+```
+
+### Configuring Backpressure
+
+You can control backpressure behavior using the `highWaterMark` option:
+
+```ts
+// Small buffer - more aggressive backpressure
+const tightBackpressure = pipe(
+  from(largeDataSet),
+  map(x => expensiveOperation(x)),
+  { highWaterMark: 1 }  // Process one item at a time
+);
+
+// Larger buffer - more throughput, more memory usage
+const looserBackpressure = pipe(
+  from(largeDataSet), 
+  map(x => expensiveOperation(x)),
+  { highWaterMark: 16 } // Process up to 16 items ahead
 );
 ```
 
-This is achieved (as best as possible) by operators adhering to the controller.desiredSize and having operator producers to wait for 'pull' calls before resuming. 
+### Real-World Backpressure Scenarios
+
+```ts
+// File processing with backpressure
+const fileProcessor = pipe(
+  from(largeFileList),
+  map(async filename => {
+    const content = await fs.readFile(filename);  // Disk I/O
+    return processContent(content);               // CPU-intensive
+  }),
+  filter(result => result.isValid),
+  { highWaterMark: 3 }  // Process max 3 files concurrently
+);
+
+// HTTP API with rate limiting
+const apiProcessor = pipe(
+  from(apiEndpoints),
+  map(async endpoint => {
+    await sleep(1000);  // Rate limit: 1 request per second
+    return fetch(endpoint).then(r => r.json());
+  }),
+  { highWaterMark: 2 }  // Max 2 pending requests
+);
+
+// Database batch processing
+const dbProcessor = pipe(
+  from(records),
+  buffer(100),          // Process in batches of 100
+  map(async batch => {
+    return db.insertMany(batch);  // Batch database operation
+  }),
+  { highWaterMark: 1 }  // One batch at a time to avoid overwhelming DB
+);
+```
+
+### Benefits of Proper Backpressure
+
+- **Memory stability**: Prevents unbounded memory growth
+- **Resource efficiency**: Balances throughput with resource usage  
+- **Error resilience**: Reduces likelihood of out-of-memory errors
+- **Predictable performance**: Maintains consistent processing rates 
 
 ## Browser Compatibility
 

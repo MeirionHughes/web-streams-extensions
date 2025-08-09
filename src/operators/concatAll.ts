@@ -1,8 +1,8 @@
-import { isReadableStream } from "../utils/is-readable.js";
+import { from } from "../from.js";
 
-export function concatAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise<T> | ArrayLike<T>>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<ReadableStream<T>>, opts?: { highWaterMark?: number }) {
-    let readerSrc: ReadableStreamDefaultReader<ReadableStream<T> | Promise<T>> = null;
+export function concatAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
+  return function (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, opts?: { highWaterMark?: number }) {
+    let readerSrc: ReadableStreamDefaultReader<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>> = null;
     let reader: ReadableStreamDefaultReader<T> = null;
 
     async function flush(controller: ReadableStreamDefaultController<T>) {
@@ -14,19 +14,18 @@ export function concatAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise
               controller.close();
               return;
             } else {
-              let src = await next.value;
-              if (Array.isArray(src)) {
-                for (let item of src) {
-                  controller.enqueue(item);
-                }
-                // Continue the loop to get next item if we still need more
-                continue;
-              } else if (isReadableStream(src)) {
-                reader = src.getReader();
+              let value = next.value;
+              
+              // Convert value to stream using from() helper
+              let innerStream: ReadableStream<T>;
+              if (value instanceof ReadableStream) {
+                innerStream = value;
               } else {
-                controller.enqueue(src);
-                return;
+                // Use from() to handle Promise<T>, Iterable<T>, or AsyncIterable<T>
+                innerStream = from(value);
               }
+              
+              reader = innerStream.getReader();
             }
           }
 

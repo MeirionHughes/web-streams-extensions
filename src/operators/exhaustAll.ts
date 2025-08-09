@@ -1,60 +1,47 @@
 import { from } from "../from.js";
-import { pipe } from "../pipe.js";
-import { map } from "./map.js";
 
 /**
- * Maps each source value to a ReadableStream, Promise, or array, but ignores new values
- * while the current inner stream is still active. Only subscribes to a new inner stream
- * after the current one completes.
- * Similar to RxJS exhaustMap operator.
+ * Flattens a stream of streams by dropping new inner streams while the current one is still active.
+ * Similar to RxJS exhaustAll operator.
  * 
- * @template T The input type
- * @template R The output type of the inner streams
- * @param project A function that maps each source value to a ReadableStream, Promise, or array.
- *                Receives (value, index, signal) where signal is an AbortSignal that will be 
- *                aborted when this projection is cancelled
- * @returns A stream operator that transforms and flattens values with exhaustion strategy
+ * Each time a new inner stream arrives, if there's no currently active inner stream,
+ * it subscribes to it. If there is already an active inner stream, the new one is ignored.
+ * Only when the current inner stream completes will exhaustAll consider subscribing to the next one.
+ * 
+ * @template T The type of values emitted by the inner streams
+ * @returns A stream operator that flattens with exhaust strategy
  * 
  * @example
  * ```typescript
- * // Handle rapid clicks - ignore subsequent clicks while processing
+ * // Handle rapid events but ignore new ones while processing
  * pipe(
- *   fromEvent(button, 'click'),
- *   exhaustMap(() => fetch('/api/data').then(r => r.json()))
+ *   from([
+ *     from([1, 2]),      // Will be processed
+ *     from([3, 4]),      // Will be ignored if first is still active
+ *     from([5, 6])       // Will be ignored if any previous is still active
+ *   ]),
+ *   exhaustAll()
  * )
- * // Only one request at a time, ignores clicks during ongoing request
+ * // Result: [1, 2] (3, 4, 5, 6 are ignored)
  * 
- * // With arrays
- * pipe(
- *   from([1, 2, 3]),
- *   exhaustMap(n => [n, n * 10]) // Each maps to 2 values
- * )
- * // Might emit: 1, 10 (if 2 and 3 arrive while processing 1)
- * 
- * // HTTP requests with proper cancellation
+ * // Real-world example: click handling with debouncing
  * pipe(
  *   buttonClicks,
- *   exhaustMap((event, index, signal) => 
- *     fetch('/api/action', { signal }).then(r => r.json()).then(data => from([data]))
- *   )
+ *   map(() => timer(1000).pipe(map(() => 'Action completed'))),
+ *   exhaustAll()
  * )
- * // Ignores rapid clicks, cancels requests on stream cancel
+ * // Ignores rapid clicks - only first click triggers action
  * ```
  */
-export interface ExhaustMapProjector<T, R> {
-  (value: T, index: number, signal?: AbortSignal): ReadableStream<R> | Promise<R> | Iterable<R> | AsyncIterable<R>;
-}
 
-export function exhaustMap<T, R>(projector: ExhaustMapProjector<T, R>): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+export function exhaustAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
+  return function (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, { highWaterMark = 16 } = {}) {
     let cancelled = false;
-    let index = 0;
-    let currentAbortController: AbortController | null = null;
-
-    return new ReadableStream<R>({
+    
+    return new ReadableStream<T>({
       async start(controller) {
         const sourceReader = src.getReader();
-        let currentInnerReader: ReadableStreamDefaultReader<R> | null = null;
+        let currentInnerReader: ReadableStreamDefaultReader<T> | null = null;
         let sourceDone = false;
         let isProcessingInner = false;
 
@@ -73,23 +60,17 @@ export function exhaustMap<T, R>(projector: ExhaustMapProjector<T, R>): (src: Re
                 break;
               }
 
+              // Convert value to stream using from() helper
+              let innerStream: ReadableStream<T>;
+              if (value instanceof ReadableStream) {
+                innerStream = value;
+              } else {
+                // Use from() to handle Promise<T>, Iterable<T>, or AsyncIterable<T>
+                innerStream = from(value);
+              }
+
               // if there's no active inner stream
               if (!isProcessingInner) {
-                // Create AbortController for this projection
-                currentAbortController = new AbortController();
-                
-                // Apply projector to get inner stream
-                const projected = projector(value, index++, currentAbortController.signal);
-                
-                // Convert projected result to stream
-                let innerStream: ReadableStream<R>;
-                if (projected instanceof ReadableStream) {
-                  innerStream = projected;
-                } else {
-                  // Use from() to handle Promise<R>, Iterable<R>, or AsyncIterable<R>
-                  innerStream = from(projected);
-                }
-
                 // trigger a worker to consume the new inner stream and set state
                 isProcessingInner = true;
                 currentInnerReader = innerStream.getReader();
@@ -128,11 +109,6 @@ export function exhaustMap<T, R>(projector: ExhaustMapProjector<T, R>): (src: Re
                 currentInnerReader = null;
                 isProcessingInner = false;
                 
-                // Clean up abort controller
-                if (currentAbortController) {
-                  currentAbortController = null;
-                }
-                
                 // Check if we should complete
                 if (sourceDone) {
                   controller.close();
@@ -160,11 +136,6 @@ export function exhaustMap<T, R>(projector: ExhaustMapProjector<T, R>): (src: Re
             currentInnerReader = null;
             isProcessingInner = false;
             
-            // Clean up abort controller
-            if (currentAbortController) {
-              currentAbortController = null;
-            }
-            
             // Propagate the error to the controller
             if (!cancelled) {
               controller.error(err);
@@ -182,10 +153,6 @@ export function exhaustMap<T, R>(projector: ExhaustMapProjector<T, R>): (src: Re
 
       cancel() {
         cancelled = true;
-        // Abort any ongoing projection
-        if (currentAbortController) {
-          currentAbortController.abort();
-        }
       }
     }, { highWaterMark });
   };

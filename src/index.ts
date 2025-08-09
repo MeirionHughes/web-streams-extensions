@@ -24,6 +24,7 @@ export * from "./to-array.js";
 export * from "./to-promise.js";
 export * from "./to-string.js";
 export * from "./zip.js";
+export * from "./interval.js";
 
 export * from "./subscribe.js";
 

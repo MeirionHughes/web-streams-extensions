@@ -1,17 +1,26 @@
 import { describe, it } from "mocha";
 import { expect } from "chai";
-import { from, pipe, toArray, exhaustMap, timer, Subject } from "../../src/index.js";
+import { from, pipe, toArray, exhaustMap, timer, Subject, interval, skip, exhaustAll, mapSync, take } from "../../src/index.js";
+import { sleep } from "../../src/utils/sleep.js";
 
 describe("exhaustMap", () => {
-  it("should ignore new values while inner stream is active", async () => {
-    const result = await toArray(pipe(
-      from([1, 2, 3]),
-      exhaustMap(n => from([n, n * 10]))
-    ));
-    // Should only process first value since others arrive while processing
-    expect(result.length).to.be.greaterThan(0);
-    expect(result[0]).to.equal(1);
-  });
+  it("should ignore new inner streams while current is active", async () => {
+      
+      const resultPromise = toArray(
+        pipe(
+          from(async function *(){            
+              yield pipe(interval(10),skip(1), take(3), mapSync(x=>x)), 
+              await sleep(30); 
+              yield pipe(interval(10),skip(1), take(3), mapSync(x=>x*10)), 
+              await sleep(30); 
+              yield pipe(interval(10),skip(1), take(3), mapSync(x=>x*100))
+          }),
+          exhaustMap(x=>pipe(x, mapSync(x=>x.toString())))
+        )
+      );
+      const result = await resultPromise;
+      expect(result).to.deep.equal(["1", "2", "3", "100", "200", "300"]);
+    });
 
   it("should work with arrays", async () => {
     const result = await toArray(pipe(
@@ -26,8 +35,8 @@ describe("exhaustMap", () => {
       from([1, 2]),
       exhaustMap(n => Promise.resolve(n * 2))
     ));
-    // Note: Current implementation processes all values
-    expect(result).to.include.members([2, 4]);
+    // With exhaust semantics, only first value should be processed
+    expect(result).to.deep.equal([2]);
   });
 
   it("should handle empty source stream", async () => {
@@ -174,14 +183,14 @@ describe("exhaustMap", () => {
   });
 
   it("should work with rapidly emitted values", async () => {
-    // Test with synchronous array source - all values will be processed
+    // Test with synchronous array source - only first value should be processed with exhaust semantics
     const result = await toArray(pipe(
       from([1, 2, 3]),
       exhaustMap(n => [n * 10])
     ));
     
-    // Current implementation processes all values synchronously
-    expect(result).to.deep.equal([10, 20, 30]);
+    // With exhaust semantics, only first value should be processed
+    expect(result).to.deep.equal([10]);
   });
 
   it("should handle single value streams", async () => {
@@ -199,11 +208,11 @@ describe("exhaustMap", () => {
       from([10, 20]),
       exhaustMap((n, index) => {
         indices.push(index);
-        return [n];
+        return [index];
       })
     ));
     
-    // Current implementation processes all values
-    expect(indices).to.deep.equal([0, 1]);
+    // With exhaust semantics, only first value should be processed
+    expect(indices).to.deep.equal([0]);
   });
 });

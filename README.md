@@ -126,9 +126,11 @@ console.log('Hot readings processed:', results);
 - `switchMap()` - Map to streams, switch to latest
 - `concatMap()` - Map to streams, concatenate sequentially
 - `exhaustMap()` - Map to streams, ignore new while active
-- `concatAll()` - Flatten stream of streams sequentially
-- `mergeAll()` - Flatten stream of streams concurrently
+- `mergeMap()` - Map to stream, concatenate concurrently
 - `switchAll()` - Switch to latest inner stream
+- `concatAll()` - Flatten stream of streams sequentially
+- `exhaustAll()` - Flatten stream of streams, ignore new while active
+- `mergeAll()` - Flatten stream of streams concurrently
 - `pairwise()` - Emit previous and current values as pairs
 - `delay()` - Delay emissions by specified time
 
@@ -154,12 +156,6 @@ console.log('Hot readings processed:', results);
 - `buffer()` - Buffer into arrays of specified size
 - `startWith()` - Prepend values to stream
 
-### Combination Operators
-- `concatAll()` - Flatten stream of streams sequentially
-- `mergeAll()` - Flatten stream of streams concurrently
-- `switchAll()` - Switch to latest inner stream
-- `exhaustAll()` - Ignore new inner streams while current is active
-- `mergeMap()` - Map each value to a stream and flatten with concurrency control
 
 ### Utility Operators
 - `tap()` - Observe values without modification

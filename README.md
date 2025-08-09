@@ -1,6 +1,7 @@
 # WebStream Extensions
 
 [![npm version](https://img.shields.io/npm/v/web-streams-extensions.svg)](https://www.npmjs.com/package/web-streams-extensions)
+[![npm beta](https://img.shields.io/npm/v/web-streams-extensions/beta.svg?label=npm%20beta)](https://www.npmjs.com/package/web-streams-extensions)
 [![Build Status](https://github.com/MeirionHughes/web-streams-extensions/workflows/Test%20and%20Coverage/badge.svg)](https://github.com/MeirionHughes/web-streams-extensions/actions)
 [![codecov](https://codecov.io/gh/MeirionHughes/web-streams-extensions/branch/master/graph/badge.svg)](https://codecov.io/gh/MeirionHughes/web-streams-extensions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

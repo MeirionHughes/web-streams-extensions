@@ -182,12 +182,22 @@ describe("exhaustAll operator", () => {
   });
 
   it("should handle rapid inner stream arrival", async () => {
-    // Create multiple streams that emit immediately
-    const streams = Array.from({ length: 5 }, (_, i) => from([i, i * 10]));
+    // Create a source stream that emits multiple inner streams rapidly
+    const sourceStream = new ReadableStream<ReadableStream<number>>({
+      start(controller) {
+        // Emit inner streams synchronously, but each inner stream has a small delay
+        controller.enqueue(pipe(from([0, 0]), delay(10)));    // First stream should be processed (20ms total)
+        controller.enqueue(pipe(from([1, 10]), delay(5)));    // Should be ignored
+        controller.enqueue(pipe(from([2, 20]), delay(5)));    // Should be ignored  
+        controller.enqueue(pipe(from([3, 30]), delay(5)));    // Should be ignored
+        controller.enqueue(pipe(from([4, 40]), delay(5)));    // Should be ignored
+        controller.close();
+      }
+    });
     
     const result = await toArray(
       pipe(
-        from(streams),
+        sourceStream,
         exhaustAll()
       )
     );

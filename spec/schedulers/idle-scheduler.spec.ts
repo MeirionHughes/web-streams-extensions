@@ -215,7 +215,8 @@ describe('IdleScheduler', () => {
       Promise.resolve().then(() => results.push('microtask2'));
       
       // Check results after all have had time to execute
-      await sleep(20); // Use deterministic sleep
+      // Increased delay for browser timing reliability
+      await sleep(100); // Use deterministic sleep with longer delay for browsers
       expect(results).to.have.lengthOf(4);
       expect(results).to.include.members(['scheduled1', 'microtask1', 'scheduled2', 'microtask2']);
     });

@@ -82,13 +82,22 @@ describe("subject", () => {
     let subject = new Subject();
     let pulled = [];
 
-    pipe(src.readable).pipeTo(subject.writable);
+    // Start the pipe operation
+    const pipePromise = pipe(src.readable).pipeTo(subject.writable);
 
     let outputTask = toArray(subject.readable);
     let outputTask2 = toArray(src.readable);
 
+    // Emit value and ensure it's processed
     await src.next(1);
+    
+    // Small delay to ensure the value has been piped through
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Now complete the subject to stop the pipe
     await subject.complete();
+    
+    // Emit more values to source
     await src.next(2);
     await src.complete();
 

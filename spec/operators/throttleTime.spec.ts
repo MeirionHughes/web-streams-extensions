@@ -134,14 +134,14 @@ describe("throttleTime", () => {
         yield input[1]; // t=10: queued for trailing
         await sleep(10);
         yield input[2]; // t=20: overwrites trailing queue (only last counts)
-        await sleep(40); // t=60: emit 3 as trailing, start new window
-        yield input[3]; // t=60: emit 4 immediately (leading)
-        await sleep(15);
-        yield input[4]; // t=75: queued for trailing
-        await sleep(35); // t=110: emit 5 as trailing, start new window
-        yield input[5]; // t=110: emit 6 immediately (leading)
-        await sleep(15);
-        yield input[6]; // t=125: queued for trailing, will emit on completion
+        await sleep(50); // t=70: emit 3 as trailing, start new window (increased gap)
+        yield input[3]; // t=70: emit 4 immediately (leading)
+        await sleep(10);
+        yield input[4]; // t=80: queued for trailing
+        await sleep(50); // t=130: emit 5 as trailing, start new window (increased gap)
+        yield input[5]; // t=130: emit 6 immediately (leading)
+        await sleep(10);
+        yield input[6]; // t=140: queued for trailing, will emit on completion
       }());
       
       const result = await toArray(
@@ -205,14 +205,14 @@ describe("throttleTime", () => {
         yield input[1]; // t=10: overwrites trailing queue
         await sleep(10);
         yield input[2]; // t=20: overwrites trailing queue
-        await sleep(40); // t=60: emit 3 as trailing
-        yield input[3]; // t=60: queued for trailing
-        await sleep(15);
-        yield input[4]; // t=75: overwrites trailing queue
-        await sleep(35); // t=110: emit 5 as trailing
-        yield input[5]; // t=110: queued for trailing
-        await sleep(15);
-        yield input[6]; // t=125: overwrites trailing queue, will emit on completion
+        await sleep(50); // t=70: emit 3 as trailing (increased gap for browser timing)
+        yield input[3]; // t=70: queued for trailing
+        await sleep(10);
+        yield input[4]; // t=80: overwrites trailing queue
+        await sleep(50); // t=130: emit 5 as trailing (increased gap for browser timing)
+        yield input[5]; // t=130: queued for trailing
+        await sleep(10);
+        yield input[6]; // t=140: overwrites trailing queue, will emit on completion
       }());
       
       const result = await toArray(

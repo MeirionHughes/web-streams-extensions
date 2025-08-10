@@ -1986,8 +1986,13 @@ npm test
 # Run tests with coverage
 npm run test:cover
 
-# Run browser tests (using Web Test Runner + Playwright)
+# Run browser tests (all browsers: Chromium, Firefox, WebKit)
 npm run test:browser
+
+# Run tests in specific browsers
+npm run test:browser:chromium
+npm run test:browser:firefox  
+npm run test:browser:webkit
 
 # Run browser tests in watch mode
 npm run test:browser:watch
@@ -1998,12 +2003,7 @@ npm run test:all
 
 ### Browser Testing
 
-Browser tests run the same test suite in real browser environments using [Web Test Runner](https://modern-web.dev/docs/test-runner/overview/) and [Playwright](https://playwright.dev/). This ensures that all operators work correctly with real browser implementations of ReadableStreams, including:
-
-- Native ReadableStream behavior
-- Browser-specific scheduling (requestAnimationFrame, requestIdleCallback)
-- Real event loop timing
-- Browser memory management
+Browser tests run the same test suite in real browser environments using [Web Test Runner](https://modern-web.dev/docs/test-runner/overview/) and [Playwright](https://playwright.dev/). This ensures that all operators work correctly with real browser implementations of ReadableStreams across **Chromium**, **Firefox**, and **WebKit** engines.
 
 ### Build
 

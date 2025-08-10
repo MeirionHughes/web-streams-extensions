@@ -17,24 +17,12 @@ export default {
         headless: true,
         args: ['--disable-web-security', '--disable-dev-shm-usage']
       }
-    }),
-    playwrightLauncher({ 
-      product: 'firefox',
-      launchOptions: { 
-        headless: true
-      }
-    }),
-    playwrightLauncher({ 
-      product: 'webkit',
-      launchOptions: { 
-        headless: true
-      }
     })
   ],
   // Timeouts
-  browserStartTimeout: 90000,
-  testsStartTimeout: 90000,
-  testsFinishTimeout: 180000,
+  browserStartTimeout: 60000,
+  testsStartTimeout: 60000,
+  testsFinishTimeout: 120000,
   
   // Handle ES modules properly
   preserveSymlinks: true,

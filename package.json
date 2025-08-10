@@ -26,6 +26,9 @@
     "test": "mocha",
     "test:cover": "c8 mocha",
     "test:browser": "web-test-runner",
+    "test:browser:chromium": "web-test-runner --config web-test-runner.chromium.config.js",
+    "test:browser:firefox": "web-test-runner --config web-test-runner.firefox.config.js",
+    "test:browser:webkit": "web-test-runner --config web-test-runner.webkit.config.js",
     "test:browser:watch": "web-test-runner --watch",
     "test:all": "npm run test && npm run test:browser",
     "prepublishOnly": "npm run test && npm run build"

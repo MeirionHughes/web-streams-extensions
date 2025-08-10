@@ -1,3 +1,42 @@
+/**
+ * Lifecycle callbacks for stream events.
+ * 
+ * These callbacks provide hooks into different stages of a stream's lifecycle,
+ * allowing for side effects like logging, cleanup, or state management.
+ */
+export type LifecycleCallbacks = {
+  /**
+   * Called when the stream starts reading from the source.
+   * Invoked during the ReadableStream's start() method.
+   */
+  start?(): void;
+  
+  /**
+   * Called when the stream completes naturally.
+   * This occurs when the source stream ends normally (reader.read() returns done: true).
+   * This is NOT called when the stream is cancelled by the consumer.
+   */
+  complete?(): void;
+  
+  /**
+   * Called when the consumer cancels/aborts the output stream.
+   * This occurs when the consumer of the output stream calls cancel() or abort().
+   * The reason parameter contains the cancellation reason provided by the consumer.
+   * 
+   * @param reason - The reason for cancellation provided by the consumer
+   */
+  cancel?(reason?: any): void;
+  
+  /**
+   * Called when the source stream encounters an error.
+   * This occurs when the input stream fails, read operations throw, or other
+   * producer-side errors happen. This represents involuntary stream termination
+   * due to infrastructure failures, data corruption, etc.
+   * 
+   * @param err - The error that caused the stream to fail
+   */
+  error?(err: any): void;
+};
 
 /**
  * Creates an operator that allows attaching lifecycle callbacks to a stream.
@@ -15,21 +54,19 @@
  *     on({
  *       start: () => console.log('Stream started'),
  *       complete: () => console.log('Stream completed'),
+ *       cancel: (reason) => console.log('Stream cancelled:', reason),
  *       error: (err) => console.error('Stream error:', err)
  *     })
  *   )
  * ```
  */
-export function on<T>(callbacks: {
-  start?(): void;
-  complete?(reason?: any): void;
-  error?(err: any): void;
-}): (src: ReadableStream<T>, opts?: { highWaterMark: number; }) => ReadableStream<T> {
+export function on<T>(callbacks: LifecycleCallbacks): (src: ReadableStream<T>, opts?: { highWaterMark: number; }) => ReadableStream<T> {
   let reader: ReadableStreamDefaultReader<T> | null = null;
+  let cancelled = false;
 
   async function flush(controller: ReadableStreamDefaultController<T>) {
     try {
-      while (controller.desiredSize > 0 && reader != null) {
+      while (controller.desiredSize > 0 && reader != null && !cancelled) {
         const next = await reader.read();
         if (next.done) {
           controller.close();
@@ -37,7 +74,8 @@ export function on<T>(callbacks: {
             reader.releaseLock();
             reader = null;
           }
-          if (callbacks.complete) {
+          // Only call complete if we weren't cancelled
+          if (!cancelled && callbacks.complete) {
             try {
               callbacks.complete();
             } catch (err) {
@@ -60,7 +98,8 @@ export function on<T>(callbacks: {
         }
         reader = null;
       }
-      if (callbacks.error) {
+      // Only call error callback if we weren't cancelled - cancellation should only trigger cancel callback
+      if (!cancelled && callbacks.error) {
         try {
           callbacks.error(err);
         } catch (callbackErr) {
@@ -87,6 +126,7 @@ export function on<T>(callbacks: {
         return flush(controller);
       },
       cancel(reason?: any) {
+        cancelled = true;  // Mark as cancelled first
         if (reader) {
           try {
             reader.cancel(reason);
@@ -96,12 +136,12 @@ export function on<T>(callbacks: {
           } finally {
             reader = null;
           }
-          if (callbacks.complete) {
-            try {
-              callbacks.complete(reason);
-            } catch (err) {
-              console.error('Error in complete callback:', err);
-            }
+        }
+        if (callbacks.cancel) {
+          try {
+            callbacks.cancel(reason);
+          } catch (err) {
+            console.error('Error in cancel callback:', err);
           }
         }
       }

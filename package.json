@@ -50,15 +50,24 @@
   },
   "homepage": "https://github.com/MeirionHughes/web-streams-extensions#readme",
   "c8": {
-    "src": ["src"],
-    "include": ["src/**/*.ts"],
+    "src": [
+      "src"
+    ],
+    "include": [
+      "src/**/*.ts"
+    ],
     "exclude": [
       "**/*.spec.ts",
       "spec/**",
       "node_modules/**",
       "coverage/**"
     ],
-    "reporter": ["text", "html", "lcov", "json-summary"],
+    "reporter": [
+      "text",
+      "html",
+      "lcov",
+      "json-summary"
+    ],
     "all": true,
     "check-coverage": true,
     "statements": 85,
@@ -84,8 +93,12 @@
     "typescript": "^5.0.0"
   },
   "mocha": {
-    "extensions": [".ts"],
-    "node-option": ["import=tsx"],
+    "extensions": [
+      ".ts"
+    ],
+    "node-option": [
+      "import=tsx"
+    ],
     "spec": [
       "spec/**/*.spec.ts"
     ],

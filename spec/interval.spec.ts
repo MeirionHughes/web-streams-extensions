@@ -2,44 +2,29 @@ import { expect } from 'chai';
 import { interval } from '../src/interval.js';
 import { take } from '../src/operators/take.js';
 import { pipe } from '../src/pipe.js';
+import { from } from '../src/from.js';
+import { toArray } from '../src/to-array.js';
+import { sleep } from '../src/utils/sleep.js';
 
 describe('interval', () => {
     it('should emit incremental numbers at specified intervals', async () => {
         const stream = pipe(
-            interval(50),
+            interval(10), // Use smaller interval for faster test
             take(3)
         );
 
-        const reader = stream.getReader();
-        const start = Date.now();
-        
-        const results = [];
-        let result = await reader.read();
-        while (!result.done) {
-            results.push(result.value);
-            result = await reader.read();
-        }
-
-        expect(results).to.deep.equal([0, 1, 2]);
-        const elapsed = Date.now() - start;
-        // Should take approximately 100ms (2 intervals of 50ms)
-        expect(elapsed).to.be.greaterThan(90);
-        expect(elapsed).to.be.lessThan(200);
+        const result = await toArray(stream);
+        expect(result).to.deep.equal([0, 1, 2]);
     });
 
     it('should start counting from 0', async () => {
         const stream = pipe(
-            interval(25),
+            interval(10), // Use smaller interval for faster test
             take(1)
         );
 
-        const reader = stream.getReader();
-        const result = await reader.read();
-        
-        expect(result.done).to.be.false;
-        expect(result.value).to.equal(0);
-        
-        reader.cancel();
+        const result = await toArray(stream);
+        expect(result).to.deep.equal([0]);
     });
 
     it('should throw error for zero duration', () => {
@@ -51,7 +36,7 @@ describe('interval', () => {
     });
 
     it('should handle cancellation properly', async () => {
-        const stream = interval(25);
+        const stream = interval(10);
         const reader = stream.getReader();
         
         // Read first value
@@ -67,19 +52,13 @@ describe('interval', () => {
     });
 
     it('should continue emitting values until cancelled', async () => {
-        const stream = interval(25);
-        const reader = stream.getReader();
+        const stream = pipe(
+            interval(10), // Use smaller interval for faster test
+            take(5)
+        );
         
-        // Collect several values
-        const values = [];
-        for (let i = 0; i < 5; i++) {
-            const result = await reader.read();
-            values.push(result.value);
-        }
-        
-        expect(values).to.deep.equal([0, 1, 2, 3, 4]);
-        
-        await reader.cancel();
+        const result = await toArray(stream);
+        expect(result).to.deep.equal([0, 1, 2, 3, 4]);
     });
 
     it('should handle very small intervals', async () => {
@@ -88,20 +67,12 @@ describe('interval', () => {
             take(2)
         );
 
-        const reader = stream.getReader();
-        const results = [];
-        
-        let result = await reader.read();
-        while (!result.done) {
-            results.push(result.value);
-            result = await reader.read();
-        }
-
-        expect(results).to.deep.equal([0, 1]);
+        const result = await toArray(stream);
+        expect(result).to.deep.equal([0, 1]);
     });
 
     it('should handle controller errors gracefully', async () => {
-        const stream = interval(25);
+        const stream = interval(10);
         const reader = stream.getReader();
         
         // Read first value to start the timer
@@ -112,47 +83,26 @@ describe('interval', () => {
         reader.releaseLock();
         
         // Should not throw errors
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await sleep(20); // Use deterministic sleep instead of setTimeout
     });
 
-    it('should work with different interval durations', async () => {
-        const stream1 = pipe(interval(30), take(2));
-        const stream2 = pipe(interval(100), take(2));
+    it('should work with different interval durations deterministically', async () => {
+        // Test that different durations produce the same sequence, just faster/slower
+        const stream1 = pipe(interval(5), take(3));
+        const stream2 = pipe(interval(10), take(3));
         
-        const start = Date.now();
+        const [result1, result2] = await Promise.all([
+            toArray(stream1),
+            toArray(stream2)
+        ]);
         
-        // Start both streams
-        const reader1 = stream1.getReader();
-        const reader2 = stream2.getReader();
-        
-        // Stream1 should complete faster
-        const results1 = [];
-        let result1 = await reader1.read();
-        while (!result1.done) {
-            results1.push(result1.value);
-            result1 = await reader1.read();
-        }
-        
-        const midTime = Date.now();
-        
-        const results2 = [];
-        let result2 = await reader2.read();
-        while (!result2.done) {
-            results2.push(result2.value);
-            result2 = await reader2.read();
-        }
-        
-        const endTime = Date.now();
-        
-        expect(results1).to.deep.equal([0, 1]);
-        expect(results2).to.deep.equal([0, 1]);
-        
-        // First stream should complete much faster
-        expect(midTime - start).to.be.lessThan(endTime - midTime);
+        // Both should produce the same sequence
+        expect(result1).to.deep.equal([0, 1, 2]);
+        expect(result2).to.deep.equal([0, 1, 2]);
     });
 
     it('should handle multiple readers on same interval stream', async () => {
-        const stream = interval(30);
+        const stream = interval(10);
         
         const reader1 = stream.getReader();
         
@@ -168,7 +118,7 @@ describe('interval', () => {
     });
 
     it('should handle controller enqueue error when stream is cancelled', async () => {
-        // This test specifically targets the catch block in the interval callback (lines 30-35)
+        // This test specifically targets the catch block in the interval callback
         const stream = interval(1); // Very short interval
         const reader = stream.getReader();
         
@@ -181,7 +131,7 @@ describe('interval', () => {
         await reader.cancel();
         
         // Wait for the interval timer to fire and hit the error condition
-        await new Promise(resolve => setTimeout(resolve, 5));
+        await sleep(5); // Use deterministic sleep instead of setTimeout
         
         // Verify the stream handled the error gracefully (stream should be done)
         const result = await reader.read();

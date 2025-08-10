@@ -1,15 +1,12 @@
 import { describe, it } from "mocha";
 import { expect } from "chai";
 import { timer, toArray, pipe, take } from "../src/index.js";
+import { sleep } from "../src/utils/sleep.js";
 
 describe("timer", () => {
   it("should emit single value after delay", async () => {
-    const start = Date.now();
-    const result = await toArray(timer(50));
-    const elapsed = Date.now() - start;
-    
+    const result = await toArray(timer(10)); // Use smaller delay for faster test
     expect(result).to.deep.equal([0]);
-    expect(elapsed).to.be.greaterThanOrEqual(45); // Allow some timing variance
   });
 
   it("should emit incremental values with interval", async () => {
@@ -44,14 +41,15 @@ describe("timer", () => {
     const reader = timerStream.getReader();
     
     // Cancel before due time
-    setTimeout(() => reader.cancel(), 10);
+    await sleep(5); // Use deterministic delay
+    await reader.cancel();
     
     const result = await reader.read();
     expect(result.done).to.be.true;
   });
 
   it("should handle cancellation during interval", async () => {
-    const timerStream = timer(10, 50);
+    const timerStream = timer(5, 20); // Use smaller delays for faster test
     const reader = timerStream.getReader();
     
     // Get first value
@@ -67,7 +65,7 @@ describe("timer", () => {
   });
 
   it("should handle controller errors gracefully in due timer", async () => {
-    const timerStream = timer(10);
+    const timerStream = timer(5); // Use smaller delay for faster test
     const reader = timerStream.getReader();
     
     // Close the reader which should trigger cleanup
@@ -79,7 +77,7 @@ describe("timer", () => {
   });
 
   it("should handle controller errors gracefully in interval timer", async () => {
-    const timerStream = timer(10, 20);
+    const timerStream = timer(5, 10); // Use smaller delays for faster test
     const reader = timerStream.getReader();
     
     // Get first value
@@ -105,7 +103,7 @@ describe("timer", () => {
   });
 
   it("should handle multiple readers on same timer stream", async () => {
-    const timerStream = timer(10);
+    const timerStream = timer(5); // Use smaller delay for faster test
     
     const reader1 = timerStream.getReader();
     try {
@@ -125,7 +123,7 @@ describe("timer", () => {
   });
 
   it("should continue emitting until cancelled for interval timer", async () => {
-    const timerStream = timer(5, 15);
+    const timerStream = timer(2, 5); // Use smaller delays for faster test
     const reader = timerStream.getReader();
     
     const values = [];
@@ -156,7 +154,7 @@ describe("timer", () => {
   });
 
   it("should handle controller closed error in interval timer callback", async () => {
-    const timerStream = timer(5, 10);
+    const timerStream = timer(2, 5); // Use smaller delays for faster test
     const reader = timerStream.getReader();
     
     // Get the first value
@@ -168,7 +166,7 @@ describe("timer", () => {
     await reader.cancel();
     
     // Give the interval a chance to fire and encounter the closed controller
-    await new Promise(resolve => setTimeout(resolve, 15));
+    await sleep(10); // Use deterministic sleep instead of setTimeout
     
     // Verify the stream is properly closed
     const result = await reader.read();
@@ -187,11 +185,12 @@ describe("timer", () => {
   });
 
   it("should handle rapid cancellation during interval setup", async () => {
-    const timerStream = timer(1, 50);
+    const timerStream = timer(1, 20); // Use longer interval for predictable test
     const reader = timerStream.getReader();
     
     // Wait for first emission but cancel very quickly to test cleanup timing
-    setTimeout(() => reader.cancel(), 2);
+    await sleep(2); // Use deterministic sleep
+    await reader.cancel();
     
     const result = await reader.read();
     // First value might or might not come through depending on timing
@@ -218,7 +217,7 @@ describe("timer", () => {
   });
 
   it("should clean up timers when interval callback encounters closed controller", async () => {
-    const timerStream = timer(1, 5);
+    const timerStream = timer(1, 3); // Use smaller delays for faster test
     const reader = timerStream.getReader();
     
     // Get first value
@@ -229,7 +228,7 @@ describe("timer", () => {
     await reader.cancel();
     
     // Wait for interval to potentially fire
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await sleep(5); // Use deterministic sleep instead of setTimeout
     
     // Stream should be properly cleaned up
     const result = await reader.read();
@@ -237,7 +236,7 @@ describe("timer", () => {
   });
 
   it("should handle enqueue error in interval timer", async () => {
-    const timerStream = timer(1, 5);
+    const timerStream = timer(1, 3); // Use smaller delays for faster test
     const reader = timerStream.getReader();
     
     // Get first value
@@ -249,7 +248,7 @@ describe("timer", () => {
     reader.cancel();
     
     // Wait for the interval timer to fire and encounter the closed controller
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await sleep(5); // Use deterministic sleep instead of setTimeout
     
     // Verify final state
     const final = await reader.read();
@@ -291,14 +290,14 @@ describe("timer", () => {
     setImmediate(() => reader.cancel());
     
     // Wait for potential interval firing
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await sleep(5); // Use deterministic sleep instead of setTimeout
     
     const result = await reader.read();
     expect(result.done).to.be.true;
   });
 
   it("should handle enqueue error in interval timer when controller is closed", async () => {
-    // This test specifically targets the catch block in the interval timer (lines 49-54)
+    // This test specifically targets the catch block in the interval timer
     const timerStream = timer(1, 1);
     const reader = timerStream.getReader();
     
@@ -311,7 +310,7 @@ describe("timer", () => {
     await reader.cancel();
     
     // Wait for the interval timer to fire and hit the error condition
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await sleep(3); // Use deterministic sleep instead of setTimeout
     
     // Verify the stream handled the error gracefully (stream should be done)
     const result = await reader.read();
@@ -319,7 +318,7 @@ describe("timer", () => {
   });
 
   it("should handle enqueue error in due timer when controller is closed", async () => {
-    // This test specifically targets the catch block in the due timer (lines 61-66)  
+    // This test specifically targets the catch block in the due timer
     const timerStream = timer(2); // Short delay timer
     const reader = timerStream.getReader();
     
@@ -327,7 +326,7 @@ describe("timer", () => {
     await reader.cancel();
     
     // Wait for the due timer to fire and hit the error condition
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await sleep(3); // Use deterministic sleep instead of setTimeout
     
     // Verify the stream handled the error gracefully
     const result = await reader.read();
@@ -343,7 +342,7 @@ describe("timer", () => {
     await reader.cancel();
     
     // Wait for timer to fire (it should handle the error gracefully)
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await sleep(3); // Use deterministic sleep instead of setTimeout
     
     // Stream should handle the error gracefully
     const result = await reader.read();

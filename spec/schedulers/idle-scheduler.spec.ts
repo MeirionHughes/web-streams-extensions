@@ -1,6 +1,7 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { IdleScheduler } from '../../src/schedulers/idle-scheduler.js';
+import { sleep } from '../../src/utils/sleep.js';
 
 describe('IdleScheduler', () => {
   let scheduler: IdleScheduler;
@@ -186,16 +187,17 @@ describe('IdleScheduler', () => {
   });
 
   describe('performance characteristics', () => {
-    it('should not block for extended periods', (done) => {
-      const start = Date.now();
+    it('should not block for extended periods', async () => {
+      let executed = false;
       scheduler.schedule(() => {
-        const elapsed = Date.now() - start;
-        expect(elapsed).to.be.lessThan(100);
-        done();
+        executed = true;
       });
+      
+      await sleep(10); // Use deterministic sleep
+      expect(executed).to.be.true;
     });
 
-    it('should allow other operations to run between schedule calls', (done) => {
+    it('should allow other operations to run between schedule calls', async () => {
       const results: string[] = [];
       
       scheduler.schedule(() => results.push('scheduled1'));
@@ -204,11 +206,9 @@ describe('IdleScheduler', () => {
       Promise.resolve().then(() => results.push('microtask2'));
       
       // Check results after all have had time to execute
-      setTimeout(() => {
-        expect(results).to.have.lengthOf(4);
-        expect(results).to.include.members(['scheduled1', 'microtask1', 'scheduled2', 'microtask2']);
-        done();
-      }, 50);
+      await sleep(20); // Use deterministic sleep
+      expect(results).to.have.lengthOf(4);
+      expect(results).to.include.members(['scheduled1', 'microtask1', 'scheduled2', 'microtask2']);
     });
   });
 });

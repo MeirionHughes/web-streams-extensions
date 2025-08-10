@@ -19,12 +19,12 @@
  * ```
  */
 export interface MapSyncSelector<T, R> {
-  (chunk: T): R | undefined;
+  (chunk: T, index: number): R | undefined;
 }
 
 export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
   let reader: ReadableStreamDefaultReader<T> | null = null;
-
+  let index = 0;
   async function flush(controller: ReadableStreamDefaultController<R>) {
     try {
       while (controller.desiredSize > 0 && reader != null) {
@@ -38,7 +38,7 @@ export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: Readable
           return;
         } else {
           try {
-            const mapped = select(next.value);
+            const mapped = select(next.value, index++);
             if (mapped !== undefined) {
               controller.enqueue(mapped);
             }

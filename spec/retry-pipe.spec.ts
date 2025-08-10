@@ -64,6 +64,7 @@ describe("retryable pipe", () => {
     expect(attempts).to.equal(2); // Should have tried twice
     // Note: This will include partial results from first attempt plus full results from retry
     // This is expected behavior for retryable streams
+    // explicitly: src: 1, 2, error, 1, 2, 3, 4, 5 > mapped x2
     expect(output).to.deep.equal([2, 4, 2, 4, 6, 8, 10]);
   });
 

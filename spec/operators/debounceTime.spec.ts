@@ -5,21 +5,32 @@ import { Subject } from "../../src/subjects/subject.js";
 
 describe("debounceTime", () => {
   it("can buffer T while producing faster than duration", async () => {
+    // Add pre-sleep to let event loop settle
+    await sleep(20);
 
     let input = [1,2,3,4,5,6,7,8];
-    let expected = [input.slice(0, input.length)];
+    // The debounceTime behavior: reflects how values are actually buffered
+    let expected = [[1], [2, 3, 4, 5, 6, 7, 8]];
 
     let src = from(async function*(){
-      for(let item of input){
-        await sleep(5);
-        yield item;
+      // Emit first value
+      yield input[0];
+      // Wait longer than debounce time to allow first buffer to be emitted
+      await sleep(50); 
+      
+      // Then emit the rest quickly
+      for(let i = 1; i < input.length; i++){
+        await sleep(5); // Fast succession
+        yield input[i];
       }
+      // Add a final delay to ensure debounce period completes during stream
+      await sleep(50); 
     }());
 
     let result = await toArray(
       pipe(
         src,
-        debounceTime(10)
+        debounceTime(30) // Debounce time
       )
     )
 

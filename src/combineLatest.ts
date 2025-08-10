@@ -1,7 +1,7 @@
 /**
  * Combines multiple ReadableStreams by emitting an array of the latest values from each source
  * whenever any source emits. All sources must emit at least once before any combined value is emitted.
- * Completes when all sources complete.
+ * Completes when ALL sources complete (RxJS behavior).
  * 
  * @template T The types of values from each source stream
  * @param sources The streams to combine
@@ -11,15 +11,17 @@
  * ```typescript
  * // Basic combine latest
  * const numbers = from([1, 2, 3]);
- * const letters = from(['a', 'b', 'c']);
+ * const letters = from(['a', 'b']);
  * const combined = combineLatest(numbers, letters);
- * // Emits: [1, 'a'], [2, 'a'], [2, 'b'], [3, 'b'], [3, 'c']
+ * // Emits: [1, 'a'], [2, 'a'], [2, 'b'], [3, 'b']
+ * // Completes when both streams complete
  * 
- * // With different timing
- * const fast = interval(100);
- * const slow = interval(300);
+ * // With different timing - continues until ALL complete
+ * const fast = from([1, 2, 3, 4]);
+ * const slow = from(['a']);
  * const combined = combineLatest(fast, slow);
- * // Emits arrays with latest from each stream when either emits
+ * // Emits: [1, 'a'], [2, 'a'], [3, 'a'], [4, 'a']
+ * // Waits for both to complete (RxJS behavior)
  * ```
  */
 
@@ -56,64 +58,107 @@ export function combineLatest(...sources: ReadableStream<any>[] | [ReadableStrea
     throw new Error("combineLatest requires at least one source stream");
   }
 
-  let readers: ReadableStreamDefaultReader<any>[] = [];
-  let latestValues: any[] = new Array(streams.length);
-  let hasValues: boolean[] = new Array(streams.length).fill(false);
-  let completedStreams: boolean[] = new Array(streams.length).fill(false);
-  let allHaveEmitted = false;
-
   return new ReadableStream<any[]>({
     async start(controller) {
-      readers = streams.map(stream => stream.getReader());
-      
-      // Read from each stream independently
-      streams.forEach(async (_, index) => {
-        try {
-          while (!completedStreams[index]) {
-            const { done, value } = await readers[index].read();
-            
-            if (done) {
-              completedStreams[index] = true;
-              
-              // If any stream completes, the combined stream should complete
-              if (completedStreams.some(completed => completed)) {
-                controller.close();
-              }
-              break;
-            }
+      let readers: ReadableStreamDefaultReader<any>[] = [];
+      const latestValues: any[] = new Array(streams.length);
+      const hasValues: boolean[] = new Array(streams.length).fill(false);
+      const completedStreams: boolean[] = new Array(streams.length).fill(false);
+      let allHaveEmitted = false;
+      let isClosed = false;
 
-            // Update latest value for this stream
-            latestValues[index] = value;
-            hasValues[index] = true;
-            
-            // Check if all streams have emitted at least once
-            if (!allHaveEmitted && hasValues.every(has => has)) {
-              allHaveEmitted = true;
-            }
-            
-            // Emit combined value if all streams have emitted
-            if (allHaveEmitted) {
-              try {
-                controller.enqueue([...latestValues]);
-              } catch (err) {
-                // Controller might be closed
+      // Helper to safely emit a combination
+      const emitCombination = () => {
+        if (!isClosed && allHaveEmitted) {
+          try {
+            controller.enqueue([...latestValues]);
+          } catch (err) {
+            // Controller might be closed due to race condition
+            isClosed = true;
+          }
+        }
+      };
+
+      // Helper to check if we should complete
+      const checkCompletion = () => {
+        // Only complete when ALL streams have completed (RxJS behavior)
+        if (!isClosed && completedStreams.every(completed => completed)) {
+          try {
+            controller.close();
+            isClosed = true;
+          } catch (err) {
+            // Already closed
+            isClosed = true;
+          }
+        }
+      };
+
+      try {
+        // Create readers for all streams
+        readers = streams.map(stream => stream.getReader());
+
+        // Start independent workers for each stream
+        const workers = streams.map(async (_, index) => {
+          try {
+            while (!completedStreams[index] && !isClosed) {
+              const { done, value } = await readers[index].read();
+              
+              if (done) {
+                completedStreams[index] = true;
+                checkCompletion();
                 break;
               }
+
+              // Update latest value for this stream
+              latestValues[index] = value;
+              hasValues[index] = true;
+              
+              // Check if all streams have emitted at least once
+              if (!allHaveEmitted && hasValues.every(has => has)) {
+                allHaveEmitted = true;
+              }
+              
+              // Emit combination if all streams have emitted
+              emitCombination();
+            }
+          } catch (err) {
+            if (!isClosed) {
+              controller.error(err);
+              isClosed = true;
             }
           }
-        } catch (err) {
-          controller.error(err);
-        }
-      });
+        });
+
+        // Wait for all workers to complete, but don't block the controller
+        Promise.all(workers).catch(err => {
+          if (!isClosed) {
+            controller.error(err);
+            isClosed = true;
+          }
+        });
+
+      } catch (err) {
+        controller.error(err);
+        isClosed = true;
+      }
+
+      // Store readers reference for cleanup
+      (controller as any)._readers = readers;
     },
+    
     cancel() {
-      readers.forEach(reader => {
-        if (reader) {
-          reader.cancel();
-          reader.releaseLock();
+      // Clean up all readers
+      const readers = ((this as any)._readers || []) as ReadableStreamDefaultReader<any>[];
+      readers.forEach((reader) => {
+        try {
+          if (reader) {
+            reader.cancel();
+            reader.releaseLock();
+          }
+        } catch (err) {
+          // Reader might already be released
         }
       });
-      readers = [];
     }
   });
 }

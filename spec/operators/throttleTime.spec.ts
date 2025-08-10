@@ -1,343 +1,397 @@
 import { expect } from "chai";
-import { from, pipe, throttleTime, toArray, Subject } from "../../src/index.js";
+import { from, pipe, throttleTime, toArray, Subject, ThrottleConfig, tap } from "../../src/index.js";
+import { sleep } from "../../src/utils/sleep.js";
 
 describe("throttleTime", () => {
-  it("should handle empty stream", async () => {
-    const result = await toArray(pipe(
-      from([]),
-      throttleTime(100)
-    ));
+
+  describe("{ leading: true, trailing: false } - default behavior", () => {
     
-    expect(result).to.deep.equal([]);
+    it("should emit first value immediately and ignore subsequent values until throttle period expires", async () => {
+      // RxJS pattern: '-a-x-y----b---x-cx---|'
+      // Expected:     '-a--------b-----c----|'
+      // Throttle window: 50ms
+      
+      const input = [1, 2, 3, 4, 5, 6];
+      let emissionTimes: number[] = [];
+      const startTime = Date.now();
+      
+      const source = from(async function*() {
+        yield input[0]; // t=0: emit 1 immediately
+        await sleep(10);
+        yield input[1]; // t=10: should be ignored (within throttle window)
+        await sleep(10);
+        yield input[2]; // t=20: should be ignored (within throttle window)
+        await sleep(40); // t=60: throttle window expired
+        yield input[3]; // t=60: emit 4 immediately  
+        await sleep(10);
+        yield input[4]; // t=70: should be ignored (within new throttle window)
+        await sleep(40); // t=110: throttle window expired
+        yield input[5]; // t=110: emit 6 immediately
+      }());
+      
+      const result = await toArray(
+        pipe(
+          source,
+          throttleTime(50), // 50ms throttle
+          tap(val => emissionTimes.push(Date.now() - startTime))
+        )
+      );
+      
+      expect(result).to.deep.equal([1, 4, 6]);
+      // Verify timing: first immediate (~0ms), second after throttle (~60ms), third after throttle (~110ms)
+      expect(emissionTimes[0]).to.be.lessThan(20);
+      expect(emissionTimes[1]).to.be.greaterThan(40);
+      expect(emissionTimes[2]).to.be.greaterThan(90);
+    });
+
+    it("should handle a busy producer emitting regular sequence", async () => {
+      // RxJS pattern: 'abcdefabcdefabcdefabcdefa|'
+      // Expected:     'a-----a-----a-----a-----a|'
+      // Throttle every 5 values with 50ms throttle
+      
+      const input = ['a','b','c','d','e','f','a','b','c','d','e','f','a','b','c','d','e','f','a','b','c','d','e','f','a'];
+      
+      const source = from(async function*() {
+        for (let i = 0; i < input.length; i++) {
+          yield input[i];
+          await sleep(8); // Emit every 8ms, throttle window is 50ms
+        }
+      }());
+      
+      const result = await toArray(
+        pipe(
+          source,
+          throttleTime(50)
+        )
+      );
+      
+      // Should get roughly every 6th-7th value (50ms / 8ms ≈ 6.25)
+      expect(result.length).to.be.greaterThan(3);
+      expect(result.length).to.be.lessThan(8);
+      expect(result[0]).to.equal('a'); // First value always emitted
+    });
+
+    it("should mirror source if values are not emitted often enough", async () => {
+      // RxJS pattern: '-a--------b-----c----|'
+      // Expected:     '-a--------b-----c----|'
+      // All values outside throttle window
+      
+      const input = [1, 2, 3];
+      
+      const source = from(async function*() {
+        yield input[0];
+        await sleep(100); // Well beyond throttle window
+        yield input[1];
+        await sleep(80);  // Beyond throttle window
+        yield input[2];
+      }());
+      
+      const result = await toArray(
+        pipe(
+          source,
+          throttleTime(50)
+        )
+      );
+      
+      expect(result).to.deep.equal([1, 2, 3]);
+    });
+
+    it("should handle empty stream", async () => {
+      const result = await toArray(
+        pipe(
+          from([]),
+          throttleTime(50)
+        )
+      );
+      
+      expect(result).to.deep.equal([]);
+    });
+
+    it("should handle single value", async () => {
+      const result = await toArray(
+        pipe(
+          from([42]),
+          throttleTime(50)
+        )
+      );
+      
+      expect(result).to.deep.equal([42]);
+    });
   });
 
-  it("should handle single value", async () => {
-    const result = await toArray(pipe(
-      from([42]),
-      throttleTime(100)
-    ));
+  describe("{ leading: true, trailing: true }", () => {
     
-    expect(result).to.deep.equal([42]);
+    it("should emit first and last values in each time window", async () => {
+      // RxJS pattern: '-a-xy-----b--x--cxxx--|'
+      // Expected:     '-a---y----b---x---x---(x|)'
+      // Leading emits immediately, trailing emits last value after throttle
+      
+      const input = [1, 2, 3, 4, 5, 6, 7];
+      
+      const source = from(async function*() {
+        yield input[0]; // t=0: emit 1 immediately (leading)
+        await sleep(10);
+        yield input[1]; // t=10: queued for trailing
+        await sleep(10);
+        yield input[2]; // t=20: overwrites trailing queue (only last counts)
+        await sleep(40); // t=60: emit 3 as trailing, start new window
+        yield input[3]; // t=60: emit 4 immediately (leading)
+        await sleep(15);
+        yield input[4]; // t=75: queued for trailing
+        await sleep(35); // t=110: emit 5 as trailing, start new window
+        yield input[5]; // t=110: emit 6 immediately (leading)
+        await sleep(15);
+        yield input[6]; // t=125: queued for trailing, will emit on completion
+      }());
+      
+      const result = await toArray(
+        pipe(
+          source,
+          throttleTime(50, { leading: true, trailing: true })
+        )
+      );
+      
+      expect(result).to.deep.equal([1, 3, 4, 5, 6, 7]);
+    });
+
+    it("should emit single value if only one is given", async () => {
+      const result = await toArray(
+        pipe(
+          from([42]),
+          throttleTime(50, { leading: true, trailing: true })
+        )
+      );
+      
+      expect(result).to.deep.equal([42]);
+    });
+
+    it("should handle rapid emissions with trailing on completion", async () => {
+      const subject = new Subject<number>();
+      
+      const resultPromise = toArray(
+        pipe(
+          subject.readable,
+          throttleTime(50, { leading: true, trailing: true })
+        )
+      );
+      
+      // Emit leading value
+      await subject.next(1);
+      await sleep(10);
+      await subject.next(2); // Will be trailing
+      await sleep(10);
+      await subject.next(3); // Overwrites trailing
+      
+      // Complete before throttle window expires
+      await subject.complete();
+      
+      const result = await resultPromise;
+      expect(result).to.deep.equal([1, 3]); // Leading + trailing
+    });
   });
 
-  it("should handle multiple values from completed stream", async () => {
-    const result = await toArray(pipe(
-      from([1, 2, 3, 4, 5]),
-      throttleTime(50)
-    ));
+  describe("{ leading: false, trailing: true }", () => {
     
-    // With a completed stream, behavior depends on implementation
-    expect(result).to.be.an('array');
-    expect(result.length).to.be.greaterThan(0);
+    it("should emit only the last value in each time window", async () => {
+      // RxJS pattern: '-a-xy-----b--x--cxxx--|'
+      // Expected:     '-----y--------x---x---(x|)'
+      // No leading emission, only trailing after throttle window
+      
+      const input = [1, 2, 3, 4, 5, 6, 7];
+      
+      const source = from(async function*() {
+        yield input[0]; // t=0: queued for trailing
+        await sleep(10);
+        yield input[1]; // t=10: overwrites trailing queue
+        await sleep(10);
+        yield input[2]; // t=20: overwrites trailing queue
+        await sleep(40); // t=60: emit 3 as trailing
+        yield input[3]; // t=60: queued for trailing
+        await sleep(15);
+        yield input[4]; // t=75: overwrites trailing queue
+        await sleep(35); // t=110: emit 5 as trailing
+        yield input[5]; // t=110: queued for trailing
+        await sleep(15);
+        yield input[6]; // t=125: overwrites trailing queue, will emit on completion
+      }());
+      
+      const result = await toArray(
+        pipe(
+          source,
+          throttleTime(50, { leading: false, trailing: true })
+        )
+      );
+      
+      expect(result).to.deep.equal([3, 5, 7]);
+    });
+
+    it("should wait for trailing throttle before completing", async () => {
+      const subject = new Subject<number>();
+      
+      const resultPromise = toArray(
+        pipe(
+          subject.readable,
+          throttleTime(50, { leading: false, trailing: true })
+        )
+      );
+      
+      await subject.next(1);
+      await sleep(10);
+      await subject.next(2); // This will be the trailing value
+      
+      // Complete immediately - should wait for throttle before emitting trailing
+      await subject.complete();
+      
+      const result = await resultPromise;
+      expect(result).to.deep.equal([2]);
+    });
+
+    it("should emit single value after throttle period", async () => {
+      const result = await toArray(
+        pipe(
+          from([42]),
+          throttleTime(50, { leading: false, trailing: true })
+        )
+      );
+      
+      expect(result).to.deep.equal([42]);
+    });
+
+    it("should handle multiple values with delayed completion", async () => {
+      const subject = new Subject<number>();
+      
+      const resultPromise = toArray(
+        pipe(
+          subject.readable,
+          throttleTime(30, { leading: false, trailing: true })
+        )
+      );
+      
+      // First batch
+      await subject.next(1);
+      await subject.next(2);
+      await subject.next(3); // Will be first trailing
+      
+      await sleep(40); // Wait for throttle to expire and emit
+      
+      // Second batch
+      await subject.next(4);
+      await subject.next(5); // Will be second trailing
+      
+      await sleep(40); // Wait for throttle to expire
+      
+      await subject.complete();
+      
+      const result = await resultPromise;
+      expect(result).to.deep.equal([3, 5]);
+    });
   });
 
-  it("should handle zero throttle time", async () => {
-    const values = [1, 2, 3, 4, 5];
-    const result = await toArray(pipe(
-      from(values),
-      throttleTime(0) // No throttling
-    ));
+  describe("{ leading: false, trailing: false }", () => {
     
-    // With 0 throttle, all values should pass through
-    expect(result).to.deep.equal(values);
+    it("should emit nothing for any input", async () => {
+      // With both leading and trailing false, no values should be emitted
+      const input = [1, 2, 3, 4, 5];
+      
+      const source = from(async function*() {
+        for (const value of input) {
+          yield value;
+          await sleep(10);
+        }
+      }());
+      
+      const result = await toArray(
+        pipe(
+          source,
+          throttleTime(50, { leading: false, trailing: false })
+        )
+      );
+      
+      expect(result).to.deep.equal([]);
+    });
+
+    it("should emit nothing for single value", async () => {
+      const result = await toArray(
+        pipe(
+          from([42]),
+          throttleTime(50, { leading: false, trailing: false })
+        )
+      );
+      
+      expect(result).to.deep.equal([]);
+    });
+
+    it("should emit nothing for empty stream", async () => {
+      const result = await toArray(
+        pipe(
+          from([]),
+          throttleTime(50, { leading: false, trailing: false })
+        )
+      );
+      
+      expect(result).to.deep.equal([]);
+    });
+
+    it("should emit nothing even with long delays between values", async () => {
+      const source = from(async function*() {
+        yield 1;
+        await sleep(100); // Well beyond throttle window
+        yield 2;
+        await sleep(100);
+        yield 3;
+      }());
+      
+      const result = await toArray(
+        pipe(
+          source,
+          throttleTime(50, { leading: false, trailing: false })
+        )
+      );
+      
+      expect(result).to.deep.equal([]);
+    });
   });
 
-  it("should handle basic throttling with simple stream", async () => {
-    const subject = new Subject<number>();
+  describe("edge cases and error handling", () => {
     
-    const resultPromise = toArray(pipe(
-      subject.readable,
-      throttleTime(10) // Short throttle for testing
-    ));
-    
-    // Emit values quickly then complete
-    subject.next(1);
-    subject.next(2);
-    subject.next(3);
-    subject.complete();
-    
-    const result = await resultPromise;
-    
-    // Should have at least the first value
-    expect(result).to.include(1);
-    expect(result.length).to.be.greaterThan(0);
-  });
+    it("should handle zero throttle duration", async () => {
+      const result = await toArray(
+        pipe(
+          from([1, 2, 3]),
+          throttleTime(0)
+        )
+      );
+      
+      // With zero throttle, should emit all values
+      expect(result).to.deep.equal([1, 2, 3]);
+    });
 
-  it("should throw error for negative duration", async () => {
-    try {
-      await toArray(pipe(
-        from([1, 2, 3]),
-        throttleTime(-100)
-      ));
-      expect.fail("Should have thrown an error");
-    } catch (err) {
-      // Negative durations should cause issues
-      expect(err).to.exist;
-    }
-  });
+    it("should throw error for negative throttle duration", () => {
+      expect(() => throttleTime(-1)).to.throw();
+    });
 
-  it("should handle stream errors", async () => {
-    const errorMessage = "Source error";
-    const errorStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(1);
-        controller.error(new Error(errorMessage));
+    it("should handle stream errors", async () => {
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(1);
+          controller.error(new Error("Stream error"));
+        }
+      });
+
+      try {
+        await toArray(
+          pipe(
+            errorStream,
+            throttleTime(50)
+          )
+        );
+        expect.fail("Should have thrown an error");
+      } catch (err) {
+        expect(err.message).to.equal("Stream error");
       }
     });
 
-    try {
-      await toArray(pipe(
-        errorStream,
-        throttleTime(100)
-      ));
-      expect.fail("Should have thrown an error");
-    } catch (err) {
-      expect(err.message).to.equal(errorMessage);
-    }
-  });
-
-  it("should handle cancellation properly", async () => {
-    const subject = new Subject<number>();
-    
-    const stream = pipe(
-      subject.readable,
-      throttleTime(100)
-    );
-    
-    const reader = stream.getReader();
-    
-    // Emit a value and read it
-    await subject.next(1);
-    const first = await reader.read();
-    expect(first.value).to.equal(1);
-    
-    // Cancel the reader
-    await reader.cancel("Test cancellation");
-    reader.releaseLock();
-    
-    // Further values should not be processed
-    await subject.next(2);
-    await subject.complete();
-  });
-
-  it("should handle very fast emissions", async () => {
-    const subject = new Subject<number>();
-    
-    const resultPromise = toArray(pipe(
-      subject.readable,
-      throttleTime(50)
-    ));
-    
-    // Emit values very quickly
-    for (let i = 1; i <= 10; i++) {
-      await subject.next(i);
-    }
-    
-    await subject.complete();
-    
-    const result = await resultPromise;
-    
-    // Should throttle to fewer values
-    expect(result).to.include(1); // First value always goes through
-    expect(result.length).to.be.lessThan(10);
-  });
-
-  it("should emit pending value on stream completion", async () => {
-    const subject = new Subject<number>();
-    
-    const resultPromise = toArray(pipe(
-      subject.readable,
-      throttleTime(1000) // Long throttle
-    ));
-    
-    await subject.next(1); // This goes through immediately
-    await subject.next(2); // This becomes pending
-    await subject.complete(); // Should emit pending value
-    
-    const result = await resultPromise;
-    
-    expect(result).to.include(1);
-    expect(result).to.include(2); // Pending value should be emitted on completion
-  });
-
-  it("should work with custom highWaterMark", async () => {
-    const values = [1, 2, 3, 4, 5];
-    const result = await toArray(
-      throttleTime(10)(
-        from(values),
-        { highWaterMark: 1 }
-      )
-    );
-    
-    expect(result).to.be.an('array');
-    expect(result.length).to.be.greaterThan(0);
-  });
-
-  it("should handle backpressure correctly", async () => {
-    const subject = new Subject<number>();
-    
-    const stream = pipe(
-      subject.readable,
-      throttleTime(50)
-    );
-    
-    const reader = stream.getReader();
-    const results: number[] = [];
-    
-    // Emit and read values
-    await subject.next(1);
-    await subject.next(2);
-    await subject.next(3);
-    
-    // Read what's available
-    try {
-      while (true) {
-        const result = await Promise.race([
-          reader.read(),
-          new Promise<ReadableStreamReadResult<number>>((_, reject) => 
-            setTimeout(() => reject(new Error('timeout')), 100)
-          )
-        ]);
-        
-        if (result.done) break;
-        results.push(result.value);
-      }
-    } catch (err) {
-      // Timeout is expected
-    }
-    
-    await subject.complete();
-    
-    // Read remaining values
-    try {
-      while (true) {
-        const result = await reader.read();
-        if (result.done) break;
-        results.push(result.value);
-      }
-    } catch (err) {
-      // Ignore
-    }
-    
-    reader.releaseLock();
-    
-    expect(results).to.include(1);
-  });
-
-  it("should handle very large throttle duration", async () => {
-    const subject = new Subject<number>();
-    
-    // Use a large but reasonable duration (1 hour = 3600000ms)
-    // This avoids Node.js timeout overflow warnings while still testing large duration behavior
-    const resultPromise = toArray(pipe(
-      subject.readable,
-      throttleTime(3600000) // 1 hour
-    ));
-    
-    await subject.next(1); // First value goes through
-    await subject.next(2); // This will be pending
-    await subject.complete(); // Should emit pending value
-    
-    const result = await resultPromise;
-    
-    expect(result).to.include(1);
-    expect(result).to.include(2);
-  });
-
-  it("should replace pending value with latest", async () => {
-    const subject = new Subject<number>();
-    
-    const resultPromise = toArray(pipe(
-      subject.readable,
-      throttleTime(1000) // Long throttle
-    ));
-    
-    await subject.next(1); // Goes through immediately
-    await subject.next(2); // Becomes pending
-    await subject.next(3); // Replaces pending value
-    await subject.next(4); // Replaces pending value again
-    await subject.complete();
-    
-    const result = await resultPromise;
-    
-    expect(result).to.include(1);
-    expect(result).to.include(4); // Should have latest pending value
-    expect(result).to.not.include(2);
-    expect(result).to.not.include(3);
-  });
-
-  it("should handle controller already closed error", async () => {
-    const subject = new Subject<number>();
-    
-    const stream = pipe(
-      subject.readable,
-      throttleTime(10)
-    );
-    
-    const reader = stream.getReader();
-    
-    await subject.next(1);
-    const first = await reader.read();
-    expect(first.value).to.equal(1);
-    
-    // Complete the subject to close the controller
-    await subject.complete();
-    
-    // Wait for completion
-    const final = await reader.read();
-    expect(final.done).to.be.true;
-    
-    reader.releaseLock();
-  });
-
-  it("should cleanup timeout on error", async () => {
-    let timeoutsCleaned = 0;
-    const originalClearTimeout = clearTimeout;
-    (global as any).clearTimeout = (id: any) => {
-      timeoutsCleaned++;
-      return originalClearTimeout(id);
-    };
-    
-    try {
-      const subject = new Subject<number>();
-      const errorPromise = toArray(pipe(
-        subject.readable,
-        throttleTime(100)
-      ));
-
-      // Emit first value (will be emitted immediately)
-      await subject.next(1);
-      // Emit second value (will be pending and create a timeout)
-      await subject.next(2);
-      
-      // Now error the stream, which should trigger cleanup
-      await subject.error(new Error("Test error"));
-      
-      try {
-        await errorPromise;
-        expect.fail("Should have thrown an error");
-      } catch (err) {
-        // Expected error
-      }
-      
-      // Give some time for cleanup
-      await new Promise(resolve => setTimeout(resolve, 10));
-      
-      expect(timeoutsCleaned).to.be.greaterThan(0);
-    } finally {
-      (global as any).clearTimeout = originalClearTimeout;
-    }
-  });
-
-  it("should cleanup timeout on cancel", async () => {
-    let timeoutsCleaned = 0;
-    const originalClearTimeout = clearTimeout;
-    (global as any).clearTimeout = (id: any) => {
-      timeoutsCleaned++;
-      return originalClearTimeout(id);
-    };
-    
-    try {
+    it("should handle cancellation properly", async () => {
       const subject = new Subject<number>();
       
       const stream = pipe(
@@ -347,92 +401,89 @@ describe("throttleTime", () => {
       
       const reader = stream.getReader();
       
-      // Emit first value (will be emitted immediately)
       await subject.next(1);
-      await reader.read();
-      
-      // Emit second value (will be pending and create a timeout)
       await subject.next(2);
       
-      // Small delay to ensure timeout is created
-      await new Promise(resolve => setTimeout(resolve, 10));
-      
-      // Cancel should trigger cleanup of the pending timeout
-      await reader.cancel("test");
+      // Cancel before throttle period expires
+      await reader.cancel("Test cancellation");
       reader.releaseLock();
       
-      // Give some time for cleanup
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await subject.complete();
+    });
+
+    it("should handle very short throttle times", async () => {
+      const result = await toArray(
+        pipe(
+          from([1, 2, 3]),
+          throttleTime(1)
+        )
+      );
       
-      expect(timeoutsCleaned).to.be.greaterThan(0);
-    } finally {
-      (global as any).clearTimeout = originalClearTimeout;
-    }
+      // Should still throttle effectively
+      expect(result.length).to.be.greaterThan(0);
+      expect(result[0]).to.equal(1); // First value always emitted in leading mode
+    });
+
+    it("should handle concurrent reads properly", async () => {
+      const subject = new Subject<number>();
+      
+      const throttled = pipe(
+        subject.readable,
+        throttleTime(50, { leading: true, trailing: true })
+      );
+      
+      const reader = throttled.getReader();
+      
+      // Rapid succession
+      await subject.next(1);
+      await subject.next(2);
+      await subject.next(3);
+      
+      const first = await reader.read();
+      expect(first.value).to.equal(1); // Leading value
+      
+      await subject.complete();
+      
+      const second = await reader.read();
+      expect(second.value).to.equal(3); // Trailing value
+      
+      const end = await reader.read();
+      expect(end.done).to.be.true;
+      
+      reader.releaseLock();
+    });
   });
 
-  it("should handle reader release errors during cleanup", async () => {
-    const subject = new Subject<number>();
+  describe("timing verification", () => {
     
-    const stream = pipe(
-      subject.readable,
-      throttleTime(100)
-    );
-    
-    const reader = stream.getReader();
-    
-    await subject.next(1);
-    await reader.read();
-    
-    // Cancel should handle cleanup gracefully even if reader throws
-    await reader.cancel("test");
-    reader.releaseLock();
-  });
-
-  it("should work with different data types", async () => {
-    const subject = new Subject<string>();
-    
-    const resultPromise = toArray(pipe(
-      subject.readable,
-      throttleTime(10)
-    ));
-    
-    await subject.next("a");
-    await subject.next("b");
-    await subject.next("c");
-    await subject.complete();
-    
-    const result = await resultPromise;
-    
-    expect(result).to.include("a");
-    expect(result.length).to.be.greaterThan(0);
-  });
-
-  it("should handle multiple rapid emissions followed by delay", async () => {
-    const subject = new Subject<number>();
-    
-    const resultPromise = toArray(pipe(
-      subject.readable,
-      throttleTime(50)
-    ));
-    
-    // Rapid emissions
-    await subject.next(1);
-    await subject.next(2);
-    await subject.next(3);
-    
-    // Wait for throttle period
-    await new Promise(resolve => setTimeout(resolve, 60));
-    
-    // More emissions
-    await subject.next(4);
-    await subject.next(5);
-    await subject.complete();
-    
-    const result = await resultPromise;
-    
-    expect(result).to.include(1); // First always goes through
-    expect(result.length).to.be.greaterThan(1);
-    // The exact values depend on timing, so just check we have reasonable results
-    expect(result.every(val => [1, 2, 3, 4, 5].includes(val))).to.be.true;
+    it("should respect throttle timing accurately", async () => {
+      const emissions: { value: number; time: number }[] = [];
+      const startTime = Date.now();
+      
+      const source = from(async function*() {
+        for (let i = 1; i <= 10; i++) {
+          yield i;
+          await sleep(20); // Emit every 20ms
+        }
+      }());
+      
+      await toArray(
+        pipe(
+          source,
+          throttleTime(60), // Throttle for 60ms
+          tap(value => emissions.push({ value, time: Date.now() - startTime }))
+        )
+      );
+      
+      // Should get roughly 3-4 emissions (200ms total / 60ms throttle)
+      expect(emissions.length).to.be.greaterThan(2);
+      expect(emissions.length).to.be.lessThan(6);
+      
+      // Verify timing between emissions
+      for (let i = 1; i < emissions.length; i++) {
+        const timeDiff = emissions[i].time - emissions[i-1].time;
+        expect(timeDiff).to.be.greaterThan(50); // Should be at least throttle duration
+      }
+    });
   });
 });

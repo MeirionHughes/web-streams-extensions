@@ -1,123 +1,225 @@
-import { Signal } from "../utils/signal.js";
+export interface ThrottleConfig {
+  /**
+   * If `true`, the resulting stream will emit the first value from the source instantly 
+   * and trigger the timer immediately. the next value will be emitted after the timer expires. 
+   * additional values read during the timer will be ignored. 
+   * If `false`, it will not emit immediately, but will instead trigger the timer to
+   * start the "throttling" process, while queuing the first value to be emitted. 
+   *
+   * If not provided, defaults to: `true`.
+   */
+  leading?: boolean;
+
+  /**
+   * If 'true' and if the last-read value from the source was not emitted by the throttle, 
+   * the last value will be appended to the output before completion. 
+   * if 'false' and if the last value was received during a throttling event, 
+   * the last value will be ignored. 
+   * If not provided, defaults to: `false`.
+   */
+  trailing?: boolean;
+}
 
 /**
- * Limits the rate of emissions to at most one per specified time period.
- * The first value is emitted immediately, then subsequent values are ignored until the time period expires.
+ * Emits a value from the source stream, then ignores subsequent source
+ * values for `duration` milliseconds, then repeats this process.
  * 
- * @template T The type of elements in the stream
- * @param duration The minimum time between emissions in milliseconds
- * @returns A stream operator that throttles emissions
- * 
- * @example
- * ```typescript
- * pipe(
- *   interval(100), // Emits every 100ms
- *   throttleTime(300) // Only emit every 300ms
- * )
- * // Will emit values at 0ms, 300ms, 600ms, etc.
- * ```
+ * Uses a decoupled consumer/producer pattern where consumption from source
+ * runs independently from throttled emissions.
  */
 export function throttleTime<T>(
-  duration: number
+  duration: number,
+  config?: ThrottleConfig
 ): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
-    let reader: ReadableStreamDefaultReader<T> = null;
-    let lastEmitTime = 0;
-    let pendingValue: T | undefined;
-    let hasPendingValue = false;
-    let timeoutId: NodeJS.Timeout | number | null = null;
-    let emitSignal = new Signal();
+  if (duration < 0) {
+    throw new Error("Throttle duration must be non-negative");
+  }
 
-    function cleanup() {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      if (reader) {
-        reader.releaseLock();
-        reader = null;
-      }
-    }
+  const { leading = true, trailing = false } = config || {};
 
-    function scheduleEmission(controller: ReadableStreamDefaultController<T>) {
-      if (timeoutId || !hasPendingValue) return;
-      
-      const now = Date.now();
-      const timeUntilNextEmit = Math.max(0, duration - (now - lastEmitTime));
-      
-      timeoutId = setTimeout(() => {
-        timeoutId = null;
-        if (hasPendingValue && controller.desiredSize > 0) {
+  return function(src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+    // Special case: if both leading and trailing are false, emit nothing
+    if (!leading && !trailing) {
+      return new ReadableStream<T>({
+        async start(controller) {
+          // Consume the source but emit nothing
+          const reader = src.getReader();
           try {
-            controller.enqueue(pendingValue!);
-            lastEmitTime = Date.now();
-            hasPendingValue = false;
-            emitSignal.signal(); // Signal that we've emitted
+            while (true) {
+              const { done } = await reader.read();
+              if (done) break;
+            }
+            controller.close();
           } catch (err) {
-            // Controller might be closed, ignore
+            controller.error(err);
+          } finally {
+            reader.releaseLock();
           }
         }
-      }, timeUntilNextEmit);
+      }, { highWaterMark: opts?.highWaterMark ?? 16 });
     }
 
-    async function flush(controller: ReadableStreamDefaultController<T>) {
+    let sourceReader: ReadableStreamDefaultReader<T> | null = null;
+    let isThrottling = false;
+    let lastValue: T | undefined = undefined;
+    let hasLastValue = false;
+    let isSourceComplete = false;
+    let sourceError: any = null;
+    let throttleTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+    
+    // Queue for emission control
+    const emissionQueue: T[] = [];
+
+    function clearThrottleTimer() {
+      if (throttleTimer) {
+        clearTimeout(throttleTimer);
+        throttleTimer = null;
+      }
+    }
+
+    function enqueueValue(value: T) {
+      emissionQueue.push(value);
+    }
+
+    function dequeueValue(): T | undefined {
+      return emissionQueue.shift();
+    }
+
+    function hasQueuedValue(): boolean {
+      return emissionQueue.length > 0;
+    }
+
+    function startThrottleWindow() {
+      isThrottling = true;
+      clearThrottleTimer();
+      
+      if (duration === 0) {
+        // Zero duration means immediate release
+        setTimeout(() => {
+          isThrottling = false;
+          // Check if we should emit trailing value
+          if (trailing && hasLastValue && !cancelled) {
+            enqueueValue(lastValue!);
+            hasLastValue = false;
+          }
+        }, 0);
+        return;
+      }
+      
+      throttleTimer = setTimeout(() => {
+        throttleTimer = null;
+        isThrottling = false;
+        
+        // Check if we should emit trailing value
+        if (trailing && hasLastValue && !cancelled) {
+          enqueueValue(lastValue!);
+          hasLastValue = false;
+        }
+      }, duration);
+    }
+
+    // Consumer: reads from source independently
+    async function consumeSource() {
       try {
-        while (controller.desiredSize > 0 && reader != null) {
-          let { done, value } = await reader.read();
+        sourceReader = src.getReader();
+        
+        while (!cancelled) {
+          const { done, value } = await sourceReader.read();
           
           if (done) {
-            // Emit any final pending value
-            if (hasPendingValue && controller.desiredSize > 0) {
-              controller.enqueue(pendingValue!);
-            }
-            cleanup(); // Clean up before closing
-            controller.close();
-            return;
+            isSourceComplete = true;
+            break;
           }
 
-          const currentTime = Date.now();
-          
-          if (lastEmitTime === 0 || (currentTime - lastEmitTime) >= duration) {
-            // Can emit immediately
-            controller.enqueue(value);
-            lastEmitTime = currentTime;
-            hasPendingValue = false;
-            
-            // Clear any pending timeout since we just emitted
-            if (timeoutId) {
-              clearTimeout(timeoutId);
-              timeoutId = null;
+          // Update last value for potential trailing emission
+          lastValue = value;
+          hasLastValue = true;
+
+          // Handle value based on throttle state
+          if (!isThrottling) {
+            // Not throttling - can emit leading value
+            if (leading) {
+              enqueueValue(value);
+              hasLastValue = false; // This value will be emitted as leading
+              
+              if (duration === 0) {
+                // Zero duration - all values pass through immediately
+                isThrottling = false;
+              } else {
+                startThrottleWindow();
+              }
+            } else if (trailing) {
+              // Leading false, trailing true - start throttling without emitting
+              startThrottleWindow();
             }
-          } else {
-            // Store as pending value (replaces previous pending)
-            pendingValue = value;
-            hasPendingValue = true;
-            
-            // Schedule emission for when throttle period expires
-            scheduleEmission(controller);
           }
+          // If throttling, value is just stored as lastValue for potential trailing emission
         }
       } catch (err) {
-        cleanup(); // Clean up on error
-        controller.error(err);
+        sourceError = err;
+      } finally {
+        if (sourceReader) {
+          sourceReader.releaseLock();
+          sourceReader = null;
+        }
       }
     }
+
+    // Start consuming source immediately
+    const consumerPromise = consumeSource();
 
     return new ReadableStream<T>({
       async start(controller) {
-        reader = src.getReader();
-        await flush(controller);
+        // Initial pull to start the process
+        return this.pull!(controller);
       },
+
       async pull(controller) {
-        // If we have a pending emission scheduled, wait for it
-        if (timeoutId && hasPendingValue) {
-          await emitSignal.wait();
+        try {
+          while (controller.desiredSize! > 0 && !cancelled) {
+            // Check for source error
+            if (sourceError) {
+              throw sourceError;
+            }
+
+            // Check if we have a value to emit
+            if (hasQueuedValue()) {
+              const value = dequeueValue()!;
+              controller.enqueue(value);
+              continue;
+            }
+
+            // Check if source is complete
+            if (isSourceComplete) {
+              // Handle final trailing emission
+              if (trailing && hasLastValue) {
+                controller.enqueue(lastValue!);
+                hasLastValue = false;
+                continue;
+              }
+              controller.close();
+              return;
+            }
+
+            // Wait a bit for state changes
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+        } catch (err) {
+          controller.error(err);
         }
-        await flush(controller);
       },
-      cancel() {
-        cleanup();
+
+      cancel(reason?: any) {
+        cancelled = true;
+        clearThrottleTimer();
+        
+        if (sourceReader) {
+          sourceReader.cancel(reason).catch(() => {});
+          sourceReader.releaseLock();
+          sourceReader = null;
+        }
       }
-    }, { highWaterMark });
+    }, { highWaterMark: opts?.highWaterMark ?? 16 });
   };
 }

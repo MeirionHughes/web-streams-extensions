@@ -27,26 +27,62 @@ describe('on operator', function() {
 
   it('should call complete callback when stream ends normally', async () => {
     let completeCalled = false;
+    let cancelCalled = false;
     
     const result = await toArray(pipe(
       from([1, 2]),
       on({
-        complete: () => { completeCalled = true; }
+        complete: () => { completeCalled = true; },
+        cancel: () => { cancelCalled = true; }
       })
     ));
     
     expect(completeCalled).to.be.true;
+    expect(cancelCalled).to.be.false; // Should NOT be called on normal completion
     expect(result).to.deep.equal([1, 2]);
   });
 
-  it('should call error callback when stream errors', async () => {
+  it('should call cancel callback when consumer cancels stream', async () => {
+    let completeCalled = false;
+    let cancelCalled = false;
+    let cancelReason: any = null;
+    
+    const stream = pipe(
+      from([1, 2, 3, 4, 5]),
+      on({
+        complete: () => { completeCalled = true; },
+        cancel: (reason) => { 
+          cancelCalled = true; 
+          cancelReason = reason;
+        }
+      })
+    );
+    
+    const reader = stream.getReader();
+    
+    // Read first value
+    const first = await reader.read();
+    expect(first.value).to.equal(1);
+    
+    // Cancel the stream
+    const testReason = 'User cancelled operation';
+    await reader.cancel(testReason);
+    
+    expect(cancelCalled).to.be.true;
+    expect(completeCalled).to.be.false; // Should NOT be called on cancellation
+    expect(cancelReason).to.equal(testReason);
+  });
+
+  it('should call error callback when source stream errors', async () => {
     let errorCalled = false;
+    let completeCalled = false;
+    let cancelCalled = false;
     let capturedError: any = null;
     
     const errorStream = new ReadableStream({
       start(controller) {
         controller.enqueue(1);
-        controller.error(new Error('Test error'));
+        controller.error(new Error('Source stream error'));
       }
     });
     
@@ -54,6 +90,8 @@ describe('on operator', function() {
       await toArray(pipe(
         errorStream,
         on({
+          complete: () => { completeCalled = true; },
+          cancel: () => { cancelCalled = true; },
           error: (err) => {
             errorCalled = true;
             capturedError = err;
@@ -65,8 +103,10 @@ describe('on operator', function() {
       expect.fail('Expected stream to throw error');
     } catch (err) {
       expect(errorCalled).to.be.true;
+      expect(completeCalled).to.be.false; // Should NOT be called on error
+      expect(cancelCalled).to.be.false; // Should NOT be called on error
       expect(capturedError).to.be.instanceOf(Error);
-      expect(capturedError.message).to.equal('Test error');
+      expect(capturedError.message).to.equal('Source stream error');
       expect(err).to.equal(capturedError);
     }
   });
@@ -194,35 +234,34 @@ describe('on operator', function() {
     }
   });
 
-  it('should handle cancellation', async () => {
-    let completeCalled = false;
-    let completeReason: any = null;
+  it('should handle errors in cancel callback', async () => {
+    let consoleErrorCalled = false;
+    const originalConsoleError = console.error;
+    console.error = (...args: any[]) => {
+      consoleErrorCalled = true;
+      expect(args[0]).to.equal('Error in cancel callback:');
+      expect(args[1]).to.be.instanceOf(Error);
+    };
     
-    const stream = pipe(
-      from([1, 2, 3, 4, 5]),
-      on({
-        complete: (reason) => {
-          completeCalled = true;
-          completeReason = reason;
-        }
-      })
-    );
-    
-    const reader = stream.getReader();
-    
-    // Read first value
-    const first = await reader.read();
-    expect(first.value).to.equal(1);
-    
-    // Cancel the stream
-    const cancelReason = 'User cancelled';
-    await reader.cancel(cancelReason);
-    
-    expect(completeCalled).to.be.true;
-    expect(completeReason).to.equal(cancelReason);
+    try {
+      const stream = pipe(
+        from([1, 2, 3]),
+        on({
+          cancel: () => { throw new Error('Cancel callback error'); }
+        })
+      );
+      
+      const reader = stream.getReader();
+      await reader.read();
+      await reader.cancel('test cancel');
+      
+      expect(consoleErrorCalled).to.be.true;
+    } finally {
+      console.error = originalConsoleError;
+    }
   });
 
-  it('should handle cancellation without complete callback', async () => {
+  it('should handle cancellation without cancel callback', async () => {
     const stream = pipe(
       from([1, 2, 3]),
       on({
@@ -233,7 +272,7 @@ describe('on operator', function() {
     const reader = stream.getReader();
     await reader.read();
     
-    // Should not throw when cancelling without complete callback
+    // Should not throw when cancelling without cancel callback
     await reader.cancel('test cancel');
     // If we get here, it handled cancellation gracefully
     expect(true).to.be.true;
@@ -334,22 +373,139 @@ describe('on operator', function() {
   });
 
   it('should handle complete callback with reason on cancel', async () => {
-    let completeReason: any = null;
+    // This test should be removed since complete() no longer takes a reason
+    // The cancel callback should be used instead for cancellation scenarios
+    let completeCalled = false;
+    let cancelCalled = false;
+    let cancelReason: any = null;
     
     const stream = pipe(
       from([1, 2, 3]),
       on({
-        complete: (reason) => { completeReason = reason; }
+        complete: () => { completeCalled = true; },
+        cancel: (reason) => { 
+          cancelCalled = true;
+          cancelReason = reason; 
+        }
       })
     );
     
     const reader = stream.getReader();
     await reader.read(); // Read first value
     
-    const cancelReason = { type: 'user-cancel', message: 'User requested cancellation' };
-    await reader.cancel(cancelReason);
+    const testReason = { type: 'user-cancel', message: 'User requested cancellation' };
+    await reader.cancel(testReason);
     
-    expect(completeReason).to.deep.equal(cancelReason);
+    expect(completeCalled).to.be.false; // Complete should NOT be called on cancel
+    expect(cancelCalled).to.be.true;
+    expect(cancelReason).to.deep.equal(testReason);
+  });
+
+  it('should distinguish between complete, cancel, and error scenarios', async () => {
+    // Test 1: Normal completion
+    {
+      const callbackOrder: string[] = [];
+      
+      const sourceStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(1);
+          controller.enqueue(2);
+          controller.close(); // Normal completion
+        }
+      });
+      
+      const wrappedStream = on({
+        complete: () => { callbackOrder.push('complete'); },
+        cancel: () => { callbackOrder.push('cancel'); },
+        error: () => { callbackOrder.push('error'); }
+      })(sourceStream);
+      
+      const reader = wrappedStream.getReader();
+      
+      // Read all values
+      let result1 = await reader.read();
+      expect(result1.value).to.equal(1);
+      expect(result1.done).to.be.false;
+      
+      let result2 = await reader.read();
+      expect(result2.value).to.equal(2);
+      expect(result2.done).to.be.false;
+      
+      let result3 = await reader.read();
+      expect(result3.done).to.be.true;
+      
+      expect(callbackOrder).to.deep.equal(['complete']);
+    }
+    
+    // Test 2: Consumer cancellation
+    {
+      const callbackOrder: string[] = [];
+      
+      const sourceStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(1);
+          controller.enqueue(2);
+          // Never close - this would go on indefinitely
+        }
+      });
+      
+      const wrappedStream = on({
+        complete: () => { callbackOrder.push('complete'); },
+        cancel: () => { callbackOrder.push('cancel'); },
+        error: () => { callbackOrder.push('error'); }
+      })(sourceStream);
+      
+      const reader = wrappedStream.getReader();
+      
+      // Read first value
+      let result1 = await reader.read();
+      expect(result1.value).to.equal(1);
+      expect(result1.done).to.be.false;
+      
+      // Cancel without reading more
+      await reader.cancel('user abort');
+      
+      expect(callbackOrder).to.deep.equal(['cancel']);
+    }
+    
+    // Test 3: Source error
+    {
+      const callbackOrder: string[] = [];
+      
+      const sourceStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(1);
+          // Error after the first value is available
+          setTimeout(() => {
+            controller.error(new Error('Source failure'));
+          }, 0);
+        }
+      });
+      
+      const wrappedStream = on({
+        complete: () => { callbackOrder.push('complete'); },
+        cancel: () => { callbackOrder.push('cancel'); },
+        error: () => { callbackOrder.push('error'); }
+      })(sourceStream);
+      
+      const reader = wrappedStream.getReader();
+      
+      // Read first value
+      let result1 = await reader.read();
+      expect(result1.value).to.equal(1);
+      expect(result1.done).to.be.false;
+      
+      // Try to read next - should error
+      try {
+        await reader.read();
+        expect.fail('Should have thrown');
+      } catch (err) {
+        expect(err).to.be.instanceOf(Error);
+        expect(err.message).to.equal('Source failure');
+      }
+      
+      expect(callbackOrder).to.deep.equal(['error']);
+    }
   });
 
   it('should handle reader cleanup errors on normal completion', async () => {

@@ -1,4 +1,5 @@
 import { map } from "./map.js";
+import { mapSync } from "./mapSync.js";
 
 /**
  * Creates a tap operator that performs side effects for each value but doesn't modify the stream.
@@ -19,11 +20,11 @@ import { map } from "./map.js";
  * // Emits: 2, 4, 6
  * ```
  */
-export function tap<T>(cb: (chunk: T) => void): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
+export function tap<T>(cb: (chunk: T, index: number) => void): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
   return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
-    return map((chunk: T) => {
+    return mapSync((chunk: T, index: number) => {
       try {
-        cb(chunk);
+        cb(chunk, index);
       } catch (err) {
         // Log error but don't break the stream for side effects
         console.error('Error in tap operator:', err);

@@ -19,6 +19,7 @@ export * from "./mapSync.js";
 export * from "./mergeAll.js";
 export * from "./mergeMap.js";
 export * from "./on.js";
+export * from "./on-complete.js";
 export * from "./pairwise.js";
 export * from "./reduce.js";
 export * from "./scan.js";

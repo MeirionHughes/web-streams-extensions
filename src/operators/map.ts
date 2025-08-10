@@ -19,12 +19,12 @@
  * ```
  */
 export interface MapSelector<T, R> {
-  (chunk: T): R | Promise<R>
+  (chunk: T, index:number): R | Promise<R>
 }
 
 export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
   let reader: ReadableStreamDefaultReader<T> = null;
-
+  let index = 0;
   async function flush(controller: ReadableStreamDefaultController<R>) {
     try {
       while (controller.desiredSize > 0 && reader != null) {
@@ -34,7 +34,7 @@ export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T
           reader.releaseLock();
           reader = null;
         } else {
-          let mapped = await select(next.value);
+          let mapped = await select(next.value, index++);
           if (mapped !== undefined)
             controller.enqueue(mapped);
         }

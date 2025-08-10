@@ -1379,7 +1379,7 @@ let result = await toArray(
 // Result: [1, 2, 3, 4], sideEffects: [2, 4, 6, 8]
 ```
 
-#### on\<T>(callbacks: { start?(): void; complete?(): void; error?(err: any): void }): Op\<T, T>
+#### on\<T>(callbacks: { start?(): void; complete?(): void; cancel?(reason?: any): void; error?(err: any): void }): Op\<T, T>
 
 Creates an operator that allows attaching lifecycle callbacks to a stream. Useful for side effects like logging, cleanup, or state management without modifying the stream's data flow.
 
@@ -1390,8 +1390,40 @@ let result = await toArray(
     on({
       start: () => console.log('Stream started'),
       complete: () => console.log('Stream completed'),
+      cancel: (reason) => console.log('Stream cancelled:', reason),
       error: (err) => console.error('Stream error:', err)
     })
+  )
+);
+```
+
+#### onComplete\<T>(callback: () => void): Op\<T, T>
+#### onComplete\<T>(callback: (reasonOrError?: any) => void, joinErrorCancel: boolean): Op\<T, T>
+
+Convenience operator for handling stream completion. Provides two modes:
+
+**Simple mode** (default): Only handles normal completion
+```ts
+let result = await toArray(
+  pipe(
+    from([1, 2, 3, 4]),
+    onComplete(() => console.log('Stream completed'))
+  )
+);
+```
+
+**Bundled mode**: Handles completion, errors, and cancellation in one callback
+```ts
+let result = await toArray(
+  pipe(
+    from([1, 2, 3, 4]),
+    onComplete((reasonOrError?: any) => {
+      if (reasonOrError) {
+        console.log('Stream error/cancel:', reasonOrError);
+      } else {
+        console.log('Stream completed normally');
+      }
+    }, true)
   )
 );
 ```

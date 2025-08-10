@@ -331,4 +331,70 @@ describe("switchMap", () => {
     // Verify only the last operation completed
     expect(results).to.deep.equal(['third-result']);
   });
+
+  it('should switch at precise timings', async () => {
+      // Create async generators with precise timing
+      async function* firstStream() {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        yield 'a'; // At 50ms
+        await new Promise(resolve => setTimeout(resolve, 50));
+        yield 'b'; // At 100ms
+        await new Promise(resolve => setTimeout(resolve, 100)); // Longer delay
+        yield 'c'; // At 200ms (this should be cancelled)
+        await new Promise(resolve => setTimeout(resolve, 100));
+        yield 'd'; // At 300ms (this should be cancelled)
+      }
+  
+      async function* secondStream() {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        yield 'e'; // At 50ms when this stream starts
+        await new Promise(resolve => setTimeout(resolve, 50));
+        yield 'f'; // At 100ms from when second stream starts
+        await new Promise(resolve => setTimeout(resolve, 50));
+        yield 'g'; // At 150ms from when second stream starts
+      }
+  
+      const source = new Subject<ReadableStream<string>>();
+      const stream = pipe(source.readable, switchMap(x=>x));
+      const reader = stream.getReader();
+      const results: string[] = [];
+  
+      // Start reading in background
+      const readPromise = (async () => {
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            results.push(value);
+          }
+        } catch (error) {
+          // Stream was cancelled
+        }
+      })();
+  
+      // Send first stream immediately
+      source.next(from(firstStream()));
+  
+      // Wait for 'a' and 'b' to be emitted, but before 'c'
+      // C will be emitted 200ms from when the first stream starts
+      // but if we switch to the second stream before that, 'c' should be cancelled
+      await new Promise(resolve => setTimeout(resolve, 120)); // emit after a and b (100ms at least)
+  
+      // At this point we should have received 'a' and 'b'
+      // Now send the second stream to trigger the switch (before 'c' is emitted)
+      source.next(from(secondStream()));
+  
+      // Wait for second stream to complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+  
+      // Complete the source
+      source.complete();
+  
+      // Wait for reading to finish
+      await readPromise;
+  
+      // Verify the expected sequence: a, b, then switch to e, f, g
+      // The 'c' and 'd' from first stream should be cancelled
+      expect(results).to.deep.equal(['a', 'b', 'e', 'f', 'g']);
+    });
 });

@@ -232,8 +232,8 @@ describe("switchAll", () => {
     expect(nextResult.done).to.be.true;
   });
 
-  it('should switch at precise timings matching marble diagram', async () => {
-    // Create async generators with precise timing to match the marble diagram
+  it('should switch at precise timings', async () => {
+    // Create async generators with precise timing
     async function* firstStream() {
       await new Promise(resolve => setTimeout(resolve, 50));
       yield 'a'; // At 50ms

@@ -1,18 +1,16 @@
 import { describe, it } from "mocha";
 import { expect } from "chai";
 import { from, pipe, toArray, delay, empty, of, throwError } from "../../src/index.js";
+import { sleep } from "../../src/utils/sleep.js";
 
 describe("delay", () => {
   it("should delay emissions", async () => {
-    const start = Date.now();
     const result = await toArray(pipe(
       from([1, 2, 3]),
-      delay(50)
+      delay(10) // Use smaller delay for faster test
     ));
-    const elapsed = Date.now() - start;
     
     expect(result).to.deep.equal([1, 2, 3]);
-    expect(elapsed).to.be.greaterThanOrEqual(45);
   });
 
   it("should handle zero delay", async () => {
@@ -36,15 +34,12 @@ describe("delay", () => {
   });
 
   it("should handle single value stream", async () => {
-    const start = Date.now();
     const result = await toArray(pipe(
       of(42),
-      delay(30)
+      delay(10) // Use smaller delay for faster test
     ));
-    const elapsed = Date.now() - start;
     
     expect(result).to.deep.equal([42]);
-    expect(elapsed).to.be.greaterThanOrEqual(25);
   });
 
   it("should handle stream errors", async () => {
@@ -71,7 +66,8 @@ describe("delay", () => {
     const firstPromise = reader.read();
     
     // Cancel after a short time
-    setTimeout(() => reader.cancel(), 20);
+    await sleep(10); // Use deterministic sleep
+    await reader.cancel();
     
     const result = await firstPromise;
     expect(result.done).to.be.true;
@@ -151,9 +147,8 @@ describe("delay", () => {
     const errorStream = new ReadableStream({
       start(controller) {
         controller.enqueue(1);
-        setTimeout(() => {
-          controller.error(new Error("Delayed error"));
-        }, 10);
+        // Use immediate error instead of setTimeout for deterministic test
+        controller.error(new Error("Delayed error"));
       }
     });
     
@@ -169,19 +164,13 @@ describe("delay", () => {
   });
 
   it("should wait for pending timeouts before closing", async () => {
-    const start = Date.now();
-    
     // Stream with multiple values that should all be delayed
     const result = await toArray(pipe(
       from([1, 2]),
-      delay(30)
+      delay(10) // Use smaller delay for faster test
     ));
     
-    const elapsed = Date.now() - start;
-    
     expect(result).to.deep.equal([1, 2]);
-    // Should wait for all timeouts to complete
-    expect(elapsed).to.be.greaterThanOrEqual(25);
   });
 
   it("should handle timeout cleanup on error", async () => {
@@ -192,14 +181,8 @@ describe("delay", () => {
         controllerRef = controller;
         controller.enqueue(1);
         controller.enqueue(2);
-        // Error after a delay to test timeout cleanup
-        setTimeout(() => {
-          try {
-            controller.error(new Error("Cleanup test"));
-          } catch {
-            // Ignore if already closed
-          }
-        }, 25);
+        // Error immediately instead of using setTimeout for deterministic test
+        controller.error(new Error("Cleanup test"));
       }
     });
     

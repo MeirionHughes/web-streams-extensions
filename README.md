@@ -1973,6 +1973,53 @@ import 'web-streams-polyfill/polyfill';
 import { from, pipe, map } from 'web-streams-extensions';
 ```
 
+## Development
+
+### Testing
+
+The project includes comprehensive test suites for both Node.js and browser environments:
+
+```bash
+# Run Node.js tests
+npm test
+
+# Run tests with coverage
+npm run test:cover
+
+# Run browser tests (using Web Test Runner + Playwright)
+npm run test:browser
+
+# Run browser tests in watch mode
+npm run test:browser:watch
+
+# Run all tests (Node.js + Browser)
+npm run test:all
+```
+
+### Browser Testing
+
+Browser tests run the same test suite in real browser environments using [Web Test Runner](https://modern-web.dev/docs/test-runner/overview/) and [Playwright](https://playwright.dev/). This ensures that all operators work correctly with real browser implementations of ReadableStreams, including:
+
+- Native ReadableStream behavior
+- Browser-specific scheduling (requestAnimationFrame, requestIdleCallback)
+- Real event loop timing
+- Browser memory management
+
+### Build
+
+```bash
+# Clean previous builds
+npm run clean
+
+# Build for both ESM and CommonJS
+npm run build
+
+# Build specific formats
+npm run build:esm
+npm run build:cjs
+```
+
+
 
 
 

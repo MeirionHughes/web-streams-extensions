@@ -1,4 +1,3 @@
-import { describe, it } from "mocha";
 import { expect } from "chai";
 import { timer, toArray, pipe, take } from "../src/index.js";
 import { sleep } from "../src/utils/sleep.js";
@@ -263,7 +262,9 @@ describe("timer", () => {
     // Start reading and immediately close the reader in the same event loop turn
     // This creates a race condition where the timer might fire before cancel cleanup
     const readPromise = reader.read();
-    setImmediate(() => reader.cancel()); // Cancel in next tick
+    
+    // Use setTimeout for cross-platform compatibility (works in both Node.js and browser)
+    setTimeout(() => reader.cancel(), 0); // Cancel in next tick
     
     const result = await readPromise;
     // Result might be the value or done, depending on timing
@@ -287,7 +288,8 @@ describe("timer", () => {
     expect(first.done).to.be.false;
     
     // Cancel in the next microtask to create race condition
-    setImmediate(() => reader.cancel());
+    // Use setTimeout for cross-platform compatibility
+    setTimeout(() => reader.cancel(), 0);
     
     // Wait for potential interval firing
     await sleep(5); // Use deterministic sleep instead of setTimeout

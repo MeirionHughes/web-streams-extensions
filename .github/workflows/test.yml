@@ -29,13 +29,12 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Run tests
+    - name: Run Node.js tests
       run: npm test
 
     - name: Run tests with coverage
       if: matrix.node-version == '22.x'
       run: npm run test:cover
-
 
     - name: Upload coverage reports
       if: matrix.node-version == '22.x'
@@ -58,17 +57,43 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./coverage/lcov.info
+        files: ./coverage/lcov.info
         flags: unittests
         name: codecov-umbrella
 
+  browser-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Playwright browsers
+      run: npx playwright install chromium
+
+    - name: Run browser tests
+      run: npm run test:browser
+
   coverage-badge:
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, browser-test]
     if: |
       github.ref == 'refs/heads/master' && 
       github.event_name == 'push' && 
-      needs.test.result == 'success'
+      needs.test.result == 'success' &&
+      needs.browser-test.result == 'success'
     
     steps:
     - name: Checkout code

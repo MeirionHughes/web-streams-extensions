@@ -1,4 +1,3 @@
-import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { IdleScheduler } from '../../src/schedulers/idle-scheduler.js';
 import { sleep } from '../../src/utils/sleep.js';
@@ -171,8 +170,14 @@ describe('IdleScheduler', () => {
       const originalGlobalThis = globalThis;
       
       try {
-        // Simulate environment without globalThis
-        (global as any).globalThis = undefined;
+        // Simulate environment without globalThis (works in both Node.js and browser)
+        if (typeof window !== 'undefined') {
+          // Browser environment
+          (window as any).globalThis = undefined;
+        } else {
+          // Node.js environment
+          (global as any).globalThis = undefined;
+        }
         
         const scheduler = new IdleScheduler();
         
@@ -181,7 +186,11 @@ describe('IdleScheduler', () => {
           done();
         });
       } finally {
-        (global as any).globalThis = originalGlobalThis;
+        if (typeof window !== 'undefined') {
+          (window as any).globalThis = originalGlobalThis;
+        } else {
+          (global as any).globalThis = originalGlobalThis;
+        }
       }
     });
   });

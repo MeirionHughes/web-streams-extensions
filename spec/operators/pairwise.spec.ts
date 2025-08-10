@@ -1,4 +1,3 @@
-import { describe, it } from "mocha";
 import { expect } from "chai";
 import { from, pipe, toArray, pairwise } from "../../src/index.js";
 

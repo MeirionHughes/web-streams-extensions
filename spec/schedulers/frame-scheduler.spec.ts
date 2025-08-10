@@ -1,4 +1,3 @@
-import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { FrameScheduler } from '../../src/schedulers/frame-scheduler.js';
 
@@ -170,8 +169,14 @@ describe('FrameScheduler', () => {
       const originalGlobalThis = globalThis;
       
       try {
-        // Simulate environment without globalThis
-        (global as any).globalThis = undefined;
+        // Simulate environment without globalThis (works in both Node.js and browser)
+        if (typeof window !== 'undefined') {
+          // Browser environment
+          (window as any).globalThis = undefined;
+        } else {
+          // Node.js environment
+          (global as any).globalThis = undefined;
+        }
         
         const scheduler = new FrameScheduler();
         
@@ -180,7 +185,11 @@ describe('FrameScheduler', () => {
           done();
         });
       } finally {
-        (global as any).globalThis = originalGlobalThis;
+        if (typeof window !== 'undefined') {
+          (window as any).globalThis = originalGlobalThis;
+        } else {
+          (global as any).globalThis = originalGlobalThis;
+        }
       }
     });
   });

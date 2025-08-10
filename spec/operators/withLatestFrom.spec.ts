@@ -1,4 +1,3 @@
-import { describe, it } from "mocha";
 import { expect } from "chai";
 import { from, pipe, toArray, withLatestFrom, of, timer, Subject, take, delay, throwError } from "../../src/index.js";
 

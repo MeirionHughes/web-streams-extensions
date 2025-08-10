@@ -1,4 +1,6 @@
 {
   "extensions": [".ts"],
-  "node-option": ["import=tsx"]
+  "node-option": ["import=tsx"],
+  "ui": "bdd",
+  "globals": ["describe", "it", "before", "after", "beforeEach", "afterEach"]
 }

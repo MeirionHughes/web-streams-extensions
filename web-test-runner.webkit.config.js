@@ -14,7 +14,11 @@ export default {
     playwrightLauncher({ 
       product: 'webkit',
       launchOptions: { 
-        headless: true
+        headless: true,
+        args: [
+          // WebKit/Safari performance settings
+          '--disable-extensions'
+        ]
       }
     })
   ],

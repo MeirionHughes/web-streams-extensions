@@ -1,29 +1,37 @@
+// Reverted to setTimeout for testing with Chrome anti-throttling flags
+
 /**
- * Buffers elements until a duration of time has passed since the last chunk.
- * Only emits the buffered elements after the specified duration of silence.
- * Useful for batching rapid sequences of values.
+ * Emits a notification from the source stream only after a particular time span has passed without another source emission.
  * 
- * @template T The type of elements to buffer
- * @param duration Duration in milliseconds to wait after the last chunk
- * @returns A stream operator that debounces elements by time
+ * Like delay, but passes only the most recent value from each burst of emissions.
+ * debounceTime delays values emitted by the source stream, but drops previous pending delayed emissions 
+ * if a new value arrives on the source stream. This operator keeps track of the most recent value from 
+ * the source stream, and emits that only when dueTime has passed without any other value appearing on 
+ * the source stream.
+ * 
+ * @template T The type of elements in the stream
+ * @param duration Duration in milliseconds to wait for silence before emitting the most recent value
+ * @returns A stream operator that debounces values
  * 
  * @example
  * ```typescript
+ * // Emit the most recent value after 1 second of silence
  * let stream = pipe(
  *   from(rapidValueStream),
- *   debounceTime(1000) // Wait 1 second after last value
+ *   debounceTime(1000)
  * );
  * ```
  */
-export function debounceTime<T>(duration: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T[]> {
+export function debounceTime<T>(duration: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
   if (duration <= 0) {
     throw new Error("Debounce duration must be positive");
   }
-  
+
   return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
-    let reader: ReadableStreamDefaultReader<T> = null;
-    let buffer: T[] = [];
+    let reader: ReadableStreamDefaultReader<T> | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastValue: T | undefined = undefined;
+    let hasValue = false;
     let cancelled = false;
 
     function clearTimer() {
@@ -33,38 +41,41 @@ export function debounceTime<T>(duration: number): (src: ReadableStream<T>, opts
       }
     }
 
-    function emitBuffer(controller: ReadableStreamDefaultController<T[]>) {
-      if (buffer.length > 0 && !cancelled) {
-        try {
-          controller.enqueue(buffer);
-          buffer = [];
-        } catch (err) {
-          // Controller might be closed, ignore
-        }
-      }
-    }
-
-    async function pull(controller: ReadableStreamDefaultController<T[]>) {
+    async function pull(controller: ReadableStreamDefaultController<T>) {
       try {
         while (controller.desiredSize > 0 && reader != null && !cancelled) {
           let next = await reader.read();
           if (next.done) {
             clearTimer();
-            // Emit final buffer if it has elements
-            emitBuffer(controller);
+            // Emit final value if we have one
+            if (hasValue && !cancelled) {
+              try {
+                controller.enqueue(lastValue!);
+              } catch (err) {
+                // Controller might be closed, ignore
+              }
+            }
             controller.close();
             reader.releaseLock();
             reader = null;
             return;
           } else {
-            buffer.push(next.value);
+            // Store the latest value
+            lastValue = next.value;
+            hasValue = true;
 
             // Clear existing timer and set new one
             clearTimer();
+            
             timer = setTimeout(() => {
               timer = null;
-              if (!cancelled) {
-                emitBuffer(controller);
+              if (!cancelled && hasValue) {
+                try {
+                  controller.enqueue(lastValue!);
+                  hasValue = false;
+                } catch (err) {
+                  // Controller might be closed, ignore
+                }
                 
                 // If reader is done, close the stream
                 if (reader == null) {
@@ -93,7 +104,7 @@ export function debounceTime<T>(duration: number): (src: ReadableStream<T>, opts
       }
     }
 
-    return new ReadableStream<T[]>({
+    return new ReadableStream<T>({
       start(controller) {
         reader = src.getReader();
         return pull(controller);

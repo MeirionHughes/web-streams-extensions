@@ -25,7 +25,7 @@ export function timeout<T>(duration: number): (src: ReadableStream<T>, opts?: { 
     let cancelled = false;
 
     function clearTimer() {
-      if (timer) {
+      if (timer !== null) {
         clearTimeout(timer);
         timer = null;
       }

@@ -14,7 +14,12 @@ export default {
     playwrightLauncher({ 
       product: 'firefox',
       launchOptions: { 
-        headless: true
+        headless: true,
+        args: [
+          // Firefox-specific performance settings
+          '--disable-extensions',
+          '--disable-addons'
+        ]
       }
     })
   ],

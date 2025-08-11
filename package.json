@@ -4,33 +4,33 @@
   "description": "A comprehensive collection of helper methods for WebStreams with built-in backpressure support, inspired by ReactiveExtensions",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
-  "main": "./dist/esm/index.js",
+  "main": "./dist/cjs/index.cjs",
   "engines": {
     "node": ">=14.0.0"
   },
   "exports": {
     ".": {
       "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
+      "require": "./dist/cjs/index.cjs"
     },
     "./operators": {
       "import": "./dist/esm/operators/index.js",
-      "require": "./dist/cjs/operators/index.js"
+      "require": "./dist/cjs/operators/index.cjs"
     }
   },
   "scripts": {
-    "clean": "rimraf dist && rimraf coverage && rimraf .nyc_output",
+    "clean": "rimraf node_modules && rimraf dist && rimraf coverage && rimraf .nyc_output",
     "build:esm": "tsc --outDir ./dist/esm --declaration true --project tsconfig-esm.json",
-    "build:cjs": "tsc --outDir ./dist/cjs --project tsconfig-cjs.json",
+    "build:cjs": "tsc --outDir ./dist/cjs --project tsconfig-cjs.json && node scripts/convert-cjs-extensions.cjs",
     "build": "concurrently \"npm run build:cjs\" \"npm run build:esm\"",
     "test": "mocha",
     "test:cover": "c8 mocha",
-    "test:browser": "web-test-runner",
-    "test:browser:chromium": "web-test-runner --config web-test-runner.chromium.config.js",
-    "test:browser:firefox": "web-test-runner --config web-test-runner.firefox.config.js",
-    "test:browser:webkit": "web-test-runner --config web-test-runner.webkit.config.js",
-    "test:browser:watch": "web-test-runner --watch",
-    "test:all": "npm run test && npm run test:browser",
+    "test:browser": "node scripts/test-browser.js",
+    "test:browser:chromium": "node scripts/test-browser-chromium.js",
+    "test:browser:firefox": "node scripts/test-browser-firefox.js",
+    "test:browser:webkit": "node scripts/test-browser-webkit.js",
+    "test:browser:watch": "node scripts/test-browser-watch.js",
+    "test:all": "node scripts/test-all.js",
     "prepublishOnly": "npm run test && npm run build"
   },
   "repository": {
@@ -38,6 +38,7 @@
     "url": "git+https://github.com/MeirionHughes/web-streams-extensions.git"
   },
   "keywords": [
+    "web",
     "streams",
     "webstreams",
     "reactive",

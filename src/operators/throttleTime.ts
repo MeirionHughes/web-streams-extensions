@@ -72,7 +72,7 @@ export function throttleTime<T>(
     const emissionQueue: T[] = [];
 
     function clearThrottleTimer() {
-      if (throttleTimer) {
+      if (throttleTimer !== null) {
         clearTimeout(throttleTimer);
         throttleTimer = null;
       }
@@ -203,7 +203,7 @@ export function throttleTime<T>(
             }
 
             // Wait a bit for state changes
-            await new Promise(resolve => setTimeout(resolve, 1));
+            await new Promise<void>(resolve => setTimeout(() => resolve(), 1));
           }
         } catch (err) {
           controller.error(err);

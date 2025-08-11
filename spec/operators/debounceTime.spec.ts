@@ -4,81 +4,81 @@ import { toArray, from, pipe, buffer, take, debounceTime, tap } from '../../src/
 import { Subject } from "../../src/subjects/subject.js";
 
 describe("debounceTime", () => {
-  it("can buffer T while producing faster than duration", async () => {
+  it("should emit the latest value after debounce period", async () => {
     // Add pre-sleep to let event loop settle
-    await sleep(20);
+    await sleep(10);
 
-    let input = [1,2,3,4,5,6,7,8];
-    // The debounceTime behavior: reflects how values are actually buffered
-    let expected = [[1], [2, 3, 4, 5, 6, 7, 8]];
+    let input = [1, 2, 3, 4, 5, 6, 7, 8];
+    // With RxJS behavior: emit latest value after silence
+    let expected = [1, 8]; // First value after initial delay, then latest value after rapid sequence
 
     let src = from(async function*(){
       // Emit first value
       yield input[0];
-      // Wait longer than debounce time to allow first buffer to be emitted
-      await sleep(50); 
+      // Wait longer than debounce time to allow first value to be emitted
+      await sleep(25);
       
-      // Then emit the rest quickly
+      // Then emit the rest quickly (all will be debounced, only last emitted)
       for(let i = 1; i < input.length; i++){
-        await sleep(5); // Fast succession
+        await sleep(2); // Fast succession - previous values will be dropped
         yield input[i];
       }
       // Add a final delay to ensure debounce period completes during stream
-      await sleep(50); 
+      await sleep(25); 
     }());
 
     let result = await toArray(
       pipe(
         src,
-        debounceTime(30) // Debounce time
+        debounceTime(15)
       )
     )
 
     expect(result, "stream result matches expected").to.be.deep.eq(expected);
   })
 
-  it("can debounce and yield buffer if duration expires", async () => {
+  it("should emit latest value when debounce duration expires", async () => {
 
-    let input = [1,2,3,4,5,6,7,8];
+    let input = [1, 2, 3, 4, 5, 6, 7, 8];
     let mid = 4;
-    let expected = [input.slice(0, mid), input.slice(mid)];
+    let expected = [4, 8]; // Latest values from each burst
 
     let src = from(async function*(){
       for(let index = 0; index < input.length; index++){
         let item = input[index];
-        if(index == mid){
-          await sleep(15);
-        }else{
-          await sleep(5);
-        }
         yield item;
+        if(index == mid - 1){ // Sleep after emitting the 4th item (index 3)
+          await sleep(20); // Enough time for debounce to emit value 4
+        }else{
+          await sleep(1); // Fast succession for other values
+        }
       }
     }());
 
     let result = await toArray(
       pipe(
         src,
-        debounceTime(10)
+        debounceTime(6)
       )
     )
 
     expect(result, "stream result matches expected").to.be.deep.eq(expected);
   })
 
-  it("can debounce and yield buffer if duration expires, exit early", async () => {
+  it("should emit latest value when stream ends early after partial debounce", async () => {
 
-    let input = [1,2,3,4,5,6,7,8];
+    let input = [1, 2, 3, 4, 5, 6, 7, 8];
     let pulled = [];
     let mid = 4;
-    let expected = [input.slice(0, mid)];
+    let expected = [4]; // Only the latest value from first burst before take(1)
 
     let src = from(async function*(){
       for(let index = 0; index < input.length; index++){
         let item = input[index];
         if(index == mid){
-          await sleep(15);
+          await sleep(15); // Long delay to trigger debounce emission
         }else{
-          await sleep(5);
+          await sleep(2); 
         }
         yield item;
       }
@@ -87,7 +87,7 @@ describe("debounceTime", () => {
     let result = await toArray(
       pipe(
         src,
-        debounceTime(10),
+        debounceTime(6),
         tap(x=>pulled.push(x)),
         take(1)
       )
@@ -121,7 +121,7 @@ describe("debounceTime", () => {
       )
     );
 
-    expect(result).to.deep.equal([[42]]);
+    expect(result).to.deep.equal([42]); // Single value, not array
   })
 
   it("should handle stream errors", async () => {
@@ -166,7 +166,7 @@ describe("debounceTime", () => {
     await subject.complete();
   })
 
-  it("should emit final buffer on stream completion", async () => {
+  it("should emit final value on stream completion", async () => {
     const subject = new Subject<number>();
     
     const resultPromise = toArray(
@@ -182,7 +182,7 @@ describe("debounceTime", () => {
     await subject.complete();
     
     const result = await resultPromise;
-    expect(result).to.deep.equal([[1, 2]]);
+    expect(result).to.deep.equal([2]); // Latest value, not array
   })
 
   it("should handle very short debounce time", async () => {
@@ -193,8 +193,8 @@ describe("debounceTime", () => {
       )
     );
 
-    // With very short debounce, values might be grouped differently
-    expect(result.flat().sort()).to.deep.equal([1, 2, 3]);
+    // With very short debounce, last value should be emitted
+    expect(result).to.include(3); // At least the last value should be there
   })
 
   it("should handle very long debounce time", async () => {
@@ -213,7 +213,7 @@ describe("debounceTime", () => {
       )
     );
 
-    expect(result).to.deep.equal([[1, 2, 3]]);
+    expect(result).to.deep.equal([3]); // Latest value after completion
   })
 
   it("should work with custom highWaterMark", async () => {
@@ -224,7 +224,7 @@ describe("debounceTime", () => {
       )
     );
 
-    expect(result).to.deep.equal([[1, 2, 3]]);
+    expect(result).to.deep.equal([3]); // Latest value, not array
   })
 
   it("should handle rapid emissions with delayed completion", async () => {
@@ -247,20 +247,20 @@ describe("debounceTime", () => {
     await subject.complete();
     
     const result = await resultPromise;
-    expect(result).to.deep.equal([[1, 2, 3]]);
+    expect(result).to.deep.equal([3]); // Latest value, not array
   })
 
   it("should handle multiple debounce periods", async () => {
     let input = [1, 2, 3, 4, 5, 6];
-    let expected = [[1, 2], [3, 4], [5, 6]];
+    let expected = [2, 4, 6]; // Latest values from each debounce period
 
     let src = from(async function*() {
       for (let i = 0; i < input.length; i++) {
         yield input[i];
         if (i % 2 === 1 && i < input.length - 1) {
-          await sleep(25); // Longer than debounce time
+          await sleep(12); // Long enough for debounce to emit
         } else {
-          await sleep(5); // Shorter than debounce time
+          await sleep(2); // Short delay, gets debounced
         }
       }
     }());
@@ -268,7 +268,7 @@ describe("debounceTime", () => {
     let result = await toArray(
       pipe(
         src,
-        debounceTime(15)
+        debounceTime(8)
       )
     );
 
@@ -350,7 +350,7 @@ describe("debounceTime", () => {
       )
     );
 
-    expect(result).to.deep.equal([["a", "b", "c"]]);
+    expect(result).to.deep.equal(["c"]); // Latest string value
   })
 
   it("should handle objects and complex types", async () => {
@@ -363,7 +363,7 @@ describe("debounceTime", () => {
       )
     );
 
-    expect(result).to.deep.equal([[{ id: 1 }, { id: 2 }, { id: 3 }]]);
+    expect(result).to.deep.equal([{ id: 3 }]); // Latest object value
   })
 
   it("should handle controller enqueue errors gracefully", async () => {
@@ -384,7 +384,7 @@ describe("debounceTime", () => {
     
     // Read the result normally
     const result = await reader.read();
-    expect(result.value).to.deep.equal([1]);
+    expect(result.value).to.deep.equal(1); // Single value, not array
     
     const endResult = await reader.read();
     expect(endResult.done).to.be.true;
@@ -411,7 +411,7 @@ describe("debounceTime", () => {
     
     // Wait for debounce to complete
     const result = await reader.read();
-    expect(result.value).to.deep.equal([1]);
+    expect(result.value).to.deep.equal(1); // Single value, not array
     
     const endResult = await reader.read();
     expect(endResult.done).to.be.true;

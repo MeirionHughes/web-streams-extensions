@@ -138,6 +138,7 @@ console.log('Hot readings processed:', results);
 ### Filtering Operators
 - `filter()` - Filter values by predicate
 - `distinctUntilChanged()` - Remove consecutive duplicates
+- `distinctUntilKeyChanged()` - Remove consecutive duplicates based on key comparison
 - `distinct()` - Remove duplicate values (with optional key selector)
 - `first()` - Take first value (optionally matching predicate)
 - `last()` - Take last value (optionally matching predicate)
@@ -149,7 +150,7 @@ console.log('Hot readings processed:', results);
 - `ignoreElements()` - Ignore all values, preserve completion
 
 ### Timing Operators
-- `debounceTime()` - Buffer until quiet period
+- `debounceTime()` - Emit latest value after quiet period
 - `throttleTime()` - Limit emission rate
 - `timeout()` - Error if no value within duration
 - `delay()` - Delay emissions by specified time
@@ -1009,6 +1010,40 @@ let result = await toArray(
 // Result: [1, 2, 3, 1]
 ```
 
+#### distinctUntilKeyChanged\<T, K extends keyof T>(key: K, compare?: (x: T[K], y: T[K]) => boolean): Op\<T, T>
+
+Only emits when the current value is different from the previous value, based on a specific key. Uses strict equality (===) by default on the selected key, or a custom comparison function.
+
+```ts
+// Basic usage with key comparison
+let result = await toArray(
+  pipe(
+    from([
+      { id: 1, name: 'Alice' },
+      { id: 1, name: 'Alice Updated' },
+      { id: 2, name: 'Bob' },
+      { id: 1, name: 'Alice Again' }
+    ]),
+    distinctUntilKeyChanged('id')
+  )
+);
+// Result: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }, { id: 1, name: 'Alice Again' }]
+
+// Custom comparison function
+let result2 = await toArray(
+  pipe(
+    from([
+      { name: 'Foo1' },
+      { name: 'Foo2' },
+      { name: 'Bar' },
+      { name: 'Foo3' }
+    ]),
+    distinctUntilKeyChanged('name', (x, y) => x.substring(0, 3) === y.substring(0, 3))
+  )
+);
+// Result: [{ name: 'Foo1' }, { name: 'Bar' }, { name: 'Foo3' }]
+```
+
 #### first\<T>(predicate?: (chunk: T) => boolean): Op\<T, T>
 
 Emits only the first value that matches the predicate, then completes. If no predicate is provided, emits the first value.
@@ -1150,15 +1185,15 @@ let result = await toArray(
 
 ### Timing Operators
 
-#### debounceTime\<T>(duration: number): Op\<T, T[]>
+#### debounceTime\<T>(duration: number): Op\<T, T>
 
-Buffers elements until a duration of time has passed since the last chunk, then emits the buffer. This is useful for scenarios like search input where you want to wait for the user to stop typing before processing.
+Emits a notification from the source stream only after a particular time span has passed without another source emission. Like delay, but passes only the most recent value from each burst of emissions.
 
-**Deterministic behavior:**
-- Starts a timer after each emission
-- If another value arrives before the timer expires, the timer resets and the buffer grows
-- When the timer finally expires, all buffered values are emitted as an array
-- On stream completion, any remaining buffered values are emitted immediately
+**RxJS-compatible behavior:**
+- Delays values emitted by the source stream
+- Drops previous pending delayed emissions if a new value arrives
+- Keeps track of the most recent value and emits it only when duration has passed without any other value
+- If stream completes during the debounce period, the most recent value is emitted before completion
 
 ```ts
 // Simulate rapid user input with pauses
@@ -1167,7 +1202,7 @@ const debounced = pipe(
   userInputs,
   debounceTime(300) // Wait 300ms after last input
 );
-// Result: [['h', 'e', 'l', 'l', 'o']] - all inputs bundled together
+// Result: ['o'] - only the latest value after silence
 
 // Real-world search example
 const searchInput = pipe(

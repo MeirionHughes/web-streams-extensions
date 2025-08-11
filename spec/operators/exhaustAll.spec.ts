@@ -6,19 +6,54 @@ import { sleep } from "../../src/utils/sleep.js";
 describe("exhaustAll operator", () => {
 
   it("should ignore new inner streams while current is active", async () => {
+    // Use subjects for more precise control over timing
+    const source = new Subject<ReadableStream<number>>();
     
     const resultPromise = toArray(
       pipe(
-        from(async function *(){            
-            yield pipe(interval(10),skip(1), take(3), mapSync(x=>x)), 
-            await sleep(30); 
-            yield pipe(interval(10),skip(1), take(3), mapSync(x=>x*10)), 
-            await sleep(30); 
-            yield pipe(interval(10),skip(1), take(3), mapSync(x=>x*100))
-        }),
+        source.readable,
         exhaustAll()
       )
     );
+    
+    // First stream - should be processed
+    const stream1 = new Subject<number>();
+    source.next(stream1.readable);
+    
+    // Start emitting from first stream
+    stream1.next(1);
+    await sleep(10);
+    stream1.next(2);
+    await sleep(10);
+    
+    // Second stream arrives while first is active - should be ignored
+    const stream2 = new Subject<number>();
+    source.next(stream2.readable);
+    
+    // Continue first stream
+    stream1.next(3);
+    await sleep(10);
+    stream1.complete(); // First stream completes
+    
+    await sleep(10); // Small delay to ensure completion is processed
+    
+    // Third stream arrives after first completes - should be processed
+    const stream3 = new Subject<number>();
+    source.next(stream3.readable);
+    
+    // Emit from third stream
+    await sleep(10);
+    stream3.next(100);
+    await sleep(10);
+    stream3.next(200);
+    await sleep(10);
+    stream3.next(300);
+    await sleep(10);
+    stream3.complete();
+    
+    // Complete source
+    source.complete();
+    
     const result = await resultPromise;
     expect(result).to.deep.equal([1, 2, 3, 100, 200, 300]);
   });

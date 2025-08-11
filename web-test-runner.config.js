@@ -15,7 +15,28 @@ export default {
       product: 'chromium',
       launchOptions: { 
         headless: true,
-        args: ['--disable-web-security', '--disable-dev-shm-usage']
+        args: [
+          '--disable-web-security', 
+          '--disable-dev-shm-usage',
+          // Disable throttling and background timer throttling
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          // Disable throttling of JavaScript timers in background tabs
+          '--disable-background-media-suspend',
+          '--disable-low-res-tiling',
+          // Disable CPU and GPU throttling
+          '--disable-background-mode',
+          '--disable-default-apps',
+          // High precision timing
+          '--enable-precise-memory-info',
+          '--enable-high-resolution-time',
+          // Disable other throttling mechanisms
+          '--disable-hang-monitor',
+          '--disable-prompt-on-repost',
+          '--disable-domain-reliability',
+          '--disable-features=TranslateUI,VizDisplayCompositor'
+        ]
       }
     }),
     playwrightLauncher({ 

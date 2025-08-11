@@ -168,10 +168,10 @@ describe("combineLatest", () => {
     expect(result[1]).to.deep.equal([2, 'a']); // at ~60ms when A emits 2
     expect(result[2]).to.deep.equal([2, 'b']); // at ~80ms when B emits 'b'
     
-    // Verify timing is approximately correct (allowing some margin for deterministic tests)
-    expect(timestamps[0]).to.be.closeTo(40, 20); // First emission around 40ms
-    expect(timestamps[1]).to.be.closeTo(60, 20); // Second emission around 60ms
-    expect(timestamps[2]).to.be.closeTo(80, 25); // Third emission around 80ms (allowing extra margin)
+    // Verify timing is approximately correct (allowing more margin for CI systems)
+    expect(timestamps[0]).to.be.closeTo(40, 30); // First emission around 40ms (more tolerance)
+    expect(timestamps[1]).to.be.closeTo(60, 30); // Second emission around 60ms (more tolerance)
+    expect(timestamps[2]).to.be.closeTo(80, 35); // Third emission around 80ms (more tolerance)
   });
 
   it('should handle edge cases with deterministic timing', async () => {

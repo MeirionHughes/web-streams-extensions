@@ -8,6 +8,7 @@ export * from "./defaultIfEmpty.js";
 export * from "./delay.js";
 export * from "./distinct.js";
 export * from "./distinctUntilChanged.js";
+export * from "./distinctUntilKeyChanged.js";
 export * from "./exhaustAll.js";
 export * from "./exhaustMap.js";
 export * from "./filter.js";

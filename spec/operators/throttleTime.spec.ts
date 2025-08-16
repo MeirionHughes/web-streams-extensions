@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { from, pipe, throttleTime, toArray, Subject, ThrottleConfig, tap } from "../../src/index.js";
 import { sleep } from "../../src/utils/sleep.js";
 
+
 describe("throttleTime", () => {
 
   describe("{ leading: true, trailing: false } - default behavior", () => {
@@ -450,6 +451,7 @@ describe("throttleTime", () => {
       const end = await reader.read();
       expect(end.done).to.be.true;
       
+      await reader.cancel();
       reader.releaseLock();
     });
   });

@@ -129,14 +129,23 @@ export function race<T>(...sources: ReadableStream<T>[]): ReadableStream<T> {
       
       await Promise.race(racePromises);
     },
-    cancel() {
+    async cancel() {
       isSettled = true;
-      readers.forEach(reader => {
+      await Promise.allSettled(readers.map(async reader => {
         if (reader) {
-          reader.cancel();
-          reader.releaseLock();
+          try {
+            await reader.cancel();
+          } catch (err) {
+            // Ignore cancel errors
+          } finally {
+            try {
+              reader.releaseLock();
+            } catch (err) {
+              // Ignore release errors
+            }
+          }
         }
-      });
+      }));
       readers = [];
     }
   });

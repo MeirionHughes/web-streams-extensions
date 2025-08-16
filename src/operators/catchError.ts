@@ -21,58 +21,100 @@ export function catchError<T>(
     let reader: ReadableStreamDefaultReader<T> = null;
     let fallbackReader: ReadableStreamDefaultReader<T> = null;
     let inFallback = false;
+    let reading = false; // Prevent concurrent reads
+
 
     async function flush(controller: ReadableStreamDefaultController<T>) {
+      //console.log('[catchError] flush() start', { desiredSize: controller.desiredSize, inFallback, hasReader: !!reader });
+      if (reading) {
+        //console.log('[catchError] already reading, returning early');
+        return;
+      }
+      reading = true;
       try {
-        if (inFallback && fallbackReader) {
-          // Read from fallback stream
-          while (controller.desiredSize > 0 && fallbackReader != null) {
-            let { done, value } = await fallbackReader.read();
-            
-            if (done) {
-              controller.close();
-              return;
-            }
-
-            controller.enqueue(value);
-          }
-        } else if (reader) {
-          // Read from source stream
-          while (controller.desiredSize > 0 && reader != null) {
-            let { done, value } = await reader.read();
-            
-            if (done) {
-              controller.close();
-              return;
-            }
-
-            controller.enqueue(value);
-          }
-        }
-      } catch (err) {
-        if (!inFallback) {
-          // Switch to fallback stream
-          try {
-            inFallback = true;
+        while (controller.desiredSize > 0 && reader != null) {
+          //console.log('[catchError] loop start', { desiredSize: controller.desiredSize });
+          let next = await reader.read();
+          //console.log('[catchError] read completed', { done: next.done });
+          if (next.done) {
+            //console.log('[catchError] source signaled done, closing controller');
+            controller.close();
+            src = null;
             if (reader) {
-              reader.releaseLock();
+              try {
+                //console.log('[catchError] releasing reader lock after done');
+                reader.releaseLock();
+              } catch (e) {
+                //console.log('[catchError] error releasing reader lock after done', e);
+              }
               reader = null;
             }
-            
-            const fallbackStream = selector(err, src);
-            fallbackReader = fallbackStream.getReader();
-            
-            // Continue flushing from fallback
-            await flush(controller);
-          } catch (fallbackErr) {
-            controller.error(fallbackErr);
+            // exit loop since source is finished
+            break;
+          } else {
+            //console.log('[catchError] enqueueing value', next.value);
+            controller.enqueue(next.value);
           }
-        } else {
-          // Error in fallback stream, propagate
-          controller.error(err);
         }
+
+        if (controller.desiredSize <= 0) {
+          //console.log('[catchError] exiting flush loop because desiredSize <= 0', { desiredSize: controller.desiredSize });
+        } else if (reader == null) {
+          //console.log('[catchError] exiting flush loop because reader is null');
+        }
+      } catch (err) {
+        //console.log('[catchError] caught error while reading', err);
+        if (reader) {
+          try {
+           //console.log('[catchError] cancelling reader due to error');
+            // try to cancel the reader with the error and release lock
+            await reader.cancel(err);
+            try {
+              //console.log('[catchError] releasing reader lock after cancel');
+              reader.releaseLock();
+            } catch (e) {
+              //console.log('[catchError] error releasing reader lock after cancel', e);
+            }
+          } catch (e) {
+            //console.log('[catchError] error during reader cleanup', e);
+            // Ignore cleanup errors
+          }
+          reader = null;
+        }
+
+        if (inFallback) {
+          //console.log('[catchError] already in fallback, forwarding error to controller.error');
+          controller.error(err);
+        } else {
+          //console.log('[catchError] switching to fallback via selector');
+          try {
+            src = selector(err, src);
+            //console.log('[catchError] selector returned', !!src);
+          } catch (selErr) {
+            //console.log('[catchError] selector threw error', selErr);
+            controller.error(selErr);
+            return;
+          }
+          if (src) {
+            inFallback = true;
+            try {
+              //console.log('[catchError] obtaining reader from fallback stream');
+              reader = src.getReader();
+            } catch (e) {
+              //console.log('[catchError] error getting reader from fallback stream', e);
+              controller.error(e);
+            }
+          } else {
+            //console.log('[catchError] selector returned falsy stream, closing controller');
+            controller.close();
+          }
+        }
+      } finally {
+        reading = false;
+        //console.log('[catchError] flush() end', { reading, inFallback, hasReader: !!reader, desiredSize: controller.desiredSize });
       }
     }
+
 
     return new ReadableStream<T>({
       async start(controller) {
@@ -80,9 +122,11 @@ export function catchError<T>(
         await flush(controller);
       },
       async pull(controller) {
+        //console.log('[catchError] ReadableStream pull() called');
         await flush(controller);
       },
       cancel() {
+        //console.log('[catchError] ReadableStream cancel() called');
         if (reader) {
           reader.releaseLock();
           reader = null;

@@ -2,20 +2,23 @@ import { expect } from "chai";
 import { toArray, from, pipe, buffer, throwError, empty, range, tap } from '../../src/index.js';
 import { read } from "fs";
 import { compareHighWaterMarkBehavior } from '../utils/test-highwater-mark.js';
+import { VirtualTimeScheduler } from '../../src/testing/virtual-tick-scheduler.js';
+
 
 describe("buffer", () => {
-  it("can buffer T ", async () => {
-    let inputA = [1, 2, 3, 4, 5];
-    let expected = [[1,2],[3,4],[5]]
+  describe("Real Time", () => {
+    it("can buffer T ", async () => {
+      let inputA = [1, 2, 3, 4, 5];
+      let expected = [[1,2],[3,4],[5]]
 
-    let result = await toArray(
-      pipe(
-        from(inputA),
-        buffer(2))
-    );
+      let result = await toArray(
+        pipe(
+          from(inputA),
+          buffer(2))
+      );
 
-    expect(result, "stream result matches expected").to.be.deep.eq(expected);
-  });
+      expect(result, "stream result matches expected").to.be.deep.eq(expected);
+    });
 
   it("should throw error for buffer count <= 0", () => {
     expect(() => buffer(0)).to.throw("Buffer count must be greater than 0");
@@ -254,6 +257,197 @@ describe("buffer", () => {
     let result4 = await reader.read();
     expect(result4.done).to.be.true;
     
+    await reader.cancel();
     reader.releaseLock();
+  });
+  });
+
+  describe("Virtual Time", () => {
+    describe("Basic Behavior", () => {
+      it("should handle empty stream", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('|');
+          const result = pipe(stream, buffer(2));
+          expectStream(result).toBe('|');
+        });
+      });
+
+      it("should buffer values by count", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abcdef|', { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 });
+          const result = pipe(stream, buffer(2));
+          expectStream(result).toBe('-p-q-r|', { 
+            p: [1, 2], 
+            q: [3, 4], 
+            r: [5, 6] 
+          });
+        });
+      });
+
+      it("should handle incomplete final buffer", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abcde|', { a: 1, b: 2, c: 3, d: 4, e: 5 });
+          const result = pipe(stream, buffer(3));
+          expectStream(result).toBe('--p--(q|)', { 
+            p: [1, 2, 3], 
+            q: [4, 5] 
+          });
+        });
+      });
+
+      it("should handle single value", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a|', { a: 42 });
+          const result = pipe(stream, buffer(3));
+          expectStream(result).toBe('-(p|)', { p: [42] });
+        });
+      });
+
+      it("should handle buffer size of 1", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abc|', { a: 1, b: 2, c: 3 });
+          const result = pipe(stream, buffer(1));
+          expectStream(result).toBe('abc|', { a: [1], b: [2], c: [3] });
+        });
+      });
+    });
+
+    describe("Timing Patterns", () => {
+      it("should preserve relative timing between buffers", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a-b-c-d-e-f|', { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 });
+          const result = pipe(stream, buffer(2));
+                                    'a-b-c-d-e-f|'
+          expectStream(result).toBe('--p---q---r|', { 
+            p: [1, 2], 
+            q: [3, 4], 
+            r: [5, 6] 
+          });
+        });
+      });
+
+      it("should handle grouped emissions", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('(abc)(def)|', { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 });
+          const result = pipe(stream, buffer(2));
+                                    '(abc)(def)'
+          expectStream(result).toBe('p(qr)|', { 
+            p: [1, 2], 
+            q: [3, 4], 
+            r: [5, 6] 
+          });
+        });
+      });
+
+      it("should handle complex timing patterns", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('--a--(bc)-d--e-f|', { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 });
+          const result = pipe(stream, buffer(3));
+                                    '--a--(bc)-d--e-f|'
+          expectStream(result).toBe('-----p------q|', { 
+            p: [1, 2, 3], 
+            q: [4, 5, 6] 
+          });
+        });
+      });
+
+      it("should handle spaced emissions with large buffer", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a---b---c|', { a: 1, b: 2, c: 3 });
+          const result = pipe(stream, buffer(5));
+          expectStream(result).toBe('---------(p|)', { p: [1, 2, 3] });
+        });
+      });
+    });
+
+    describe("Error Handling", () => {
+      it("should propagate source errors", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('ab#', { a: 1, b: 2 });
+          const result = pipe(stream, buffer(3));
+          expectStream(result).toBe('--#');
+        });
+      });
+
+      it("should propagate error during buffering", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a-b-c-#', { a: 1, b: 2, c: 3 });
+          const result = pipe(stream, buffer(2));
+          expectStream(result).toBe('--p---#', { p: [1, 2] });
+        });
+      });
+
+      it("should handle error before buffer completion", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a-#', { a: 1 });
+          const result = pipe(stream, buffer(3));
+          expectStream(result).toBe('--#');
+        });
+      });
+    });
+
+    describe("Edge Cases", () => {
+      it("should handle rapid emissions", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('(abcdef)|', { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 });
+          const result = pipe(stream, buffer(2));
+          expectStream(result).toBe('(pqr)|', { 
+            p: [1, 2], 
+            q: [3, 4], 
+            r: [5, 6] 
+          });
+        });
+      });
+
+      it("should handle buffer size larger than input", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('ab|', { a: 1, b: 2 });
+          const result = pipe(stream, buffer(5));
+          expectStream(result).toBe('--(p|)', { p: [1, 2] });
+        });
+      });
+
+      it("should handle single emission with large buffer", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a|', { a: 42 });
+          const result = pipe(stream, buffer(10));
+          expectStream(result).toBe('-(p|)', { p: [42] });
+        });
+      });
+
+      it("should handle delayed completion", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abc-----|', { a: 1, b: 2, c: 3 });
+          const result = pipe(stream, buffer(2));
+          expectStream(result).toBe('-p------(q|)', { 
+            p: [1, 2], 
+            q: [3] 
+          });
+        });
+      });
+    });
+
+    describe("Parameter Validation", () => {
+      it("should throw error for buffer count <= 0", () => {
+        expect(() => buffer(0)).to.throw("Buffer count must be greater than 0");
+        expect(() => buffer(-1)).to.throw("Buffer count must be greater than 0");
+      });
+    });
   });
 });

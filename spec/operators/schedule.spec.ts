@@ -1,9 +1,13 @@
 import { expect } from "chai";
 import { toArray, from, map, pipe, schedule } from '../../src/index.js';
 import { IScheduler } from "../../src/index.js";
+import { parseMarbles } from '../../src/testing/parse-marbles.js';
+import { VirtualTimeScheduler } from '../../src/testing/virtual-tick-scheduler.js';
+
 
 describe("schedule", () => {
-  it("calls scheduler per streamed chunk", async () => {
+  describe("Real Time", () => {
+    it("calls scheduler per streamed chunk", async () => {
     let inputA = [1, 2, 3, 4];
     let expected = inputA;
     let wasCalled = 0;
@@ -323,6 +327,8 @@ describe("schedule", () => {
         result.push(value);
       }
     } finally {
+      await reader.cancel();
+      await reader.cancel();
       reader.releaseLock();
     }
 
@@ -371,5 +377,235 @@ describe("schedule", () => {
     );
 
     expect(objectResult).to.deep.equal([{id: 1}, {id: 2}]);
+  });
+});
+
+  describe("Virtual Time", () => {
+    let scheduler: VirtualTimeScheduler;
+
+    beforeEach(() => {
+      scheduler = new VirtualTimeScheduler();
+    });
+
+    it("schedules chunks at their correct times", async () => {
+      await scheduler.run(({ cold, expectStream }) => {
+        const source = cold("-a-b-c-|", {
+          a: 1,
+          b: 2,
+          c: 3
+        });
+
+        const mockScheduler: IScheduler = {
+          schedule: (callback) => {
+            // In virtual time, we simulate immediate scheduling
+            callback();
+          }
+        };
+
+        const result = pipe(
+          source,
+          schedule(mockScheduler)
+        );
+
+        expectStream(result).toBe("-a-b-c-|", {
+          a: 1,
+          b: 2,
+          c: 3
+        });
+      });
+    });
+
+    it("handles empty stream", async () => {
+      await scheduler.run(({ cold, expectStream }) => {
+        const source = cold("|");
+
+        const mockScheduler: IScheduler = {
+          schedule: (callback) => {
+            callback();
+          }
+        };
+
+        const result = pipe(
+          source,
+          schedule(mockScheduler)
+        );
+
+        expectStream(result).toBe("|");
+      });
+    });
+
+    it("handles single value", async () => {
+      await scheduler.run(({ cold, expectStream }) => {
+        const source = cold("a|", { a: 42 });
+
+        const mockScheduler: IScheduler = {
+          schedule: (callback) => {
+            callback();
+          }
+        };
+
+        const result = pipe(
+          source,
+          schedule(mockScheduler)
+        );
+
+        expectStream(result).toBe("a|", { a: 42 });
+      });
+    });
+
+    it("handles errors from scheduler", async () => {
+      await scheduler.run(({ cold, expectStream }) => {
+        const source = cold("a-b-|", { a: 1, b: 2 });
+        const testError = new Error("Scheduler error");
+
+        const faultyScheduler: IScheduler = {
+          schedule: () => {
+            throw testError;
+          }
+        };
+
+        const result = pipe(
+          source,
+          schedule(faultyScheduler)
+        );
+
+        expectStream(result).toBe("#", {}, testError);
+      });
+    });
+
+    it("handles stream errors", async () => {
+      await scheduler.run(({ cold, expectStream }) => {
+        const testError = new Error("Stream error");
+        const source = cold("-a-#", { a: 1 }, testError);
+
+        const mockScheduler: IScheduler = {
+          schedule: (callback) => {
+            callback();
+          }
+        };
+
+        const result = pipe(
+          source,
+          schedule(mockScheduler)
+        );
+
+        expectStream(result).toBe("-a-#", { a: 1 }, testError);
+      });
+    });
+
+    it("maintains timing with different scheduler delays", async () => {
+      await scheduler.run(({ cold, expectStream }) => {
+        const source = cold("-a-b-c-|", {
+          a: "first",
+          b: "second", 
+          c: "third"
+        });
+
+        const mockScheduler: IScheduler = {
+          schedule: (callback) => {
+            // Simulate scheduler behavior
+            callback();
+          }
+        };
+
+        const result = pipe(
+          source,
+          schedule(mockScheduler)
+        );
+
+        expectStream(result).toBe("-a-b-c-|", {
+          a: "first",
+          b: "second",
+          c: "third"
+        });
+      });
+    });
+
+    it("handles multiple values with complex timing", async () => {
+      await scheduler.run(({ cold, expectStream }) => {
+        const source = cold("a-b--c-d-e|", {
+          a: 1,
+          b: 2,
+          c: 3,
+          d: 4,
+          e: 5
+        });
+
+        const mockScheduler: IScheduler = {
+          schedule: (callback) => {
+            callback();
+          }
+        };
+
+        const result = pipe(
+          source,
+          schedule(mockScheduler)
+        );
+
+        expectStream(result).toBe("a-b--c-d-e|", {
+          a: 1,
+          b: 2,
+          c: 3,
+          d: 4,
+          e: 5
+        });
+      });
+    });
+
+    it("handles rapid emission with scheduler delays", async () => {
+      await scheduler.run(({ cold, expectStream }) => {
+        const source = cold("abcd|", {
+          a: 1,
+          b: 2,
+          c: 3,
+          d: 4
+        });
+
+        const mockScheduler: IScheduler = {
+          schedule: (callback) => {
+            callback();
+          }
+        };
+
+        const result = pipe(
+          source,
+          schedule(mockScheduler)
+        );
+
+        expectStream(result).toBe("abcd|", {
+          a: 1,
+          b: 2,
+          c: 3,
+          d: 4
+        });
+      });
+    });
+
+    it("works with different data types", async () => {
+      await scheduler.run(({ cold, expectStream }) => {
+        const source = cold("-a-b-c|", {
+          a: { id: 1, name: "first" },
+          b: { id: 2, name: "second" },
+          c: { id: 3, name: "third" }
+        });
+
+        const mockScheduler: IScheduler = {
+          schedule: (callback) => {
+            callback();
+          }
+        };
+
+        const result = pipe(
+          source,
+          schedule(mockScheduler)
+        );
+
+        expectStream(result).toBe("-a-b-c|", {
+          a: { id: 1, name: "first" },
+          b: { id: 2, name: "second" },
+          c: { id: 3, name: "third" }
+        });
+      });
+    });
   });
 });

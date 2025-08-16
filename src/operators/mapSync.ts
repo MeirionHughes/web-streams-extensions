@@ -53,7 +53,7 @@ export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: Readable
       // Cleanup on error
       if (reader) {
         try {
-          reader.cancel(err);
+          await reader.cancel(err);
           reader.releaseLock();
         } catch (e) {
           // Ignore cleanup errors
@@ -75,7 +75,9 @@ export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: Readable
       cancel(reason?: any) {
         if (reader) {
           try {
-            reader.cancel(reason);
+            reader.cancel(reason).catch(() => {
+              // Ignore cancel errors
+            });
             reader.releaseLock();
           } catch (err) {
             // Ignore cleanup errors

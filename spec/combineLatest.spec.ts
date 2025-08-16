@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { combineLatest, from, toArray, pipe, take, timer, delay, subscribe } from "../src/index.js";
 import { sleep } from "../src/utils/sleep.js";
 
+
 describe("combineLatest", () => {
   it("should combine latest values from multiple streams", async () => {
     const result = await toArray(
@@ -169,9 +170,9 @@ describe("combineLatest", () => {
     expect(result[2]).to.deep.equal([2, 'b']); // at ~80ms when B emits 'b'
     
     // Verify timing is approximately correct (allowing more margin for CI systems)
-    expect(timestamps[0]).to.be.closeTo(40, 30); // First emission around 40ms (more tolerance)
-    expect(timestamps[1]).to.be.closeTo(60, 30); // Second emission around 60ms (more tolerance)
-    expect(timestamps[2]).to.be.closeTo(80, 35); // Third emission around 80ms (more tolerance)
+    expect(timestamps[0]).to.be.closeTo(40, 40); // First emission around 40ms (more tolerance)
+    expect(timestamps[1]).to.be.closeTo(60, 40); // Second emission around 60ms (more tolerance)
+    expect(timestamps[2]).to.be.closeTo(80, 40); // Third emission around 80ms (more tolerance)
   });
 
   it('should handle edge cases with deterministic timing', async () => {

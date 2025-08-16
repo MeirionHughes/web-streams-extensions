@@ -26,16 +26,33 @@ import { ReadableLike, isReadableLike } from "./_readable-like.js";
 export function from<T>(src: Promise<T> | Iterable<T> | AsyncIterable<T> | (() => Iterable<T> | AsyncIterable<T>) | ReadableLike<T> ): ReadableStream<T> {
 
   let it: Iterator<T> | AsyncIterator<T>;
+  let isAsyncIterator = false;
 
   async function flush(controller: ReadableStreamDefaultController<T>) {
     try {
-      while (controller.desiredSize > 0 && it != null) {
-        let next = await it.next();
-        if (next.done) {
-          it = null;
-          controller.close();
-        } else {
-          controller.enqueue(next.value);
+      if (isAsyncIterator) {
+        // For async iterators, respect desiredSize to allow backpressure
+        while (controller.desiredSize > 0 && it != null) {
+          let next = await it.next();
+          if (next.done) {
+            it = null;
+            controller.close();
+            break;
+          } else {
+            controller.enqueue(next.value);
+          }
+        }
+      } else {
+        // For sync iterators, emit all values synchronously regardless of desiredSize
+        while (it != null) {
+          let next = (it as Iterator<T>).next(); // No await for sync iterator
+          if (next.done) {
+            it = null;
+            controller.close();
+            break;
+          } else {
+            controller.enqueue(next.value);
+          }
         }
       }
     } catch (err) {
@@ -59,8 +76,10 @@ export function from<T>(src: Promise<T> | Iterable<T> | AsyncIterable<T> | (() =
 
         if (Symbol.asyncIterator && src[Symbol.asyncIterator]) {
           iterable = src[Symbol.asyncIterator].bind(src);
+          isAsyncIterator = true;
         } else if (src[Symbol.iterator]) {
           iterable = src[Symbol.iterator].bind(src);
+          isAsyncIterator = false;
         } else {
           // Handle promises and single values
           let value = await Promise.resolve(src as (T | Promise<T>));
@@ -75,7 +94,7 @@ export function from<T>(src: Promise<T> | Iterable<T> | AsyncIterable<T> | (() =
         controller.error(err);
       }
     },
-    async pull(controller) {      
+    async pull(controller) { 
       return flush(controller);
     },
     async cancel(reason?: any) {

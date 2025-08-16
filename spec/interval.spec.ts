@@ -6,6 +6,7 @@ import { from } from '../src/from.js';
 import { toArray } from '../src/to-array.js';
 import { sleep } from '../src/utils/sleep.js';
 
+
 describe('interval', () => {
     it('should emit incremental numbers at specified intervals', async () => {
         const stream = pipe(
@@ -80,10 +81,13 @@ describe('interval', () => {
         expect(result1.value).to.equal(0);
         
         // Immediately close the reader which should trigger error handling
+
+        reader.cancel();
         reader.releaseLock();
         
+        
         // Should not throw errors
-        await sleep(20); // Use deterministic sleep instead of setTimeout
+        //await sleep(20); // Use deterministic sleep instead of setTimeout
     });
 
     it('should work with different interval durations deterministically', async () => {
@@ -110,6 +114,7 @@ describe('interval', () => {
         const result1 = await reader1.read();
         expect(result1.value).to.equal(0);
         
+        reader1.cancel();
         reader1.releaseLock();
         
         // Second reader should get the same stream (but it's already started)

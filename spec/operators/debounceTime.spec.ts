@@ -2,8 +2,11 @@ import { expect } from "chai";
 import { sleep } from "../../src/utils/sleep.js";
 import { toArray, from, pipe, buffer, take, debounceTime, tap } from '../../src/index.js';
 import { Subject } from "../../src/subjects/subject.js";
+import { VirtualTimeScheduler } from "../../src/testing/virtual-tick-scheduler.js";
+
 
 describe("debounceTime", () => {
+  describe("Real Time", () => {
   it("should emit the latest value after debounce period", async () => {
     // Add pre-sleep to let event loop settle
     await sleep(10);
@@ -291,6 +294,7 @@ describe("debounceTime", () => {
     // Read the value to trigger debounce
     setTimeout(async () => {
       await reader.read();
+      await reader.cancel();
       reader.releaseLock();
     }, 5);
     
@@ -389,6 +393,7 @@ describe("debounceTime", () => {
     const endResult = await reader.read();
     expect(endResult.done).to.be.true;
     
+    await reader.cancel();
     reader.releaseLock();
   })
 
@@ -416,6 +421,7 @@ describe("debounceTime", () => {
     const endResult = await reader.read();
     expect(endResult.done).to.be.true;
     
+    await reader.cancel();
     reader.releaseLock();
   })
 
@@ -442,6 +448,7 @@ describe("debounceTime", () => {
       const debounced = debounceTime(10)(mockStream);
       const reader = debounced.getReader();
       await reader.read();
+      await reader.cancel();
       reader.releaseLock();
     } catch (err) {
       expect(err.message).to.equal("Read error");
@@ -472,15 +479,324 @@ describe("debounceTime", () => {
     const debounced = debounceTime(10)(mockStream);
     const reader = debounced.getReader();
     
-    // Trigger the stream to start
-    setTimeout(() => reader.read(), 5);
+    // Trigger the stream to start and wait for it
+    const readPromise = reader.read();
     
     // Cancel to trigger cleanup error handling
     await reader.cancel("Test cancel");
+    
+    // Wait for the read to complete before assertions
+    try {
+      await readPromise;
+    } catch (e) {
+      // Ignore errors from the cancelled read
+    }
     
     expect(cancelCalled).to.be.true;
     expect(releaseCalled).to.be.true;
     
     reader.releaseLock();
+  });
+  });
+
+  describe("Virtual Time", () => {
+    describe("Basic Behavior", () => {
+      it("should emit latest value after debounce time", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('ab|');
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('--(b|)', );
+        });
+      });
+
+      it("should emit latest value from grouped emissions", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('(abc)|', { a: 1, b: 2, c: 3 });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('-(3|)', { 3: 3 });
+        });
+      });
+
+      it("should emit value after silence period", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a---b|', { a: 1, b: 2 });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('--(1)--(2|)', { 1: 1, 2: 2 });
+        });
+      });
+
+      it("should handle empty stream", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('|');
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result).toBe('|');
+        });
+      });
+
+      it("should handle single value", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a--|', { a: 42 });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('--a|', { a: 42 });
+        });
+      });
+      
+      it("should handle single value, but input terminates early", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a|', { a: 42 });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result).toBe('-(a|)', { a: 42 });
+        });
+      });
+    });
+
+    describe("Timing Patterns", () => {
+      it("should debounce rapid emissions", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abcdef----|');
+          const result = pipe(stream, debounceTime(2));
+          // breakdown:
+
+          // tick 0: should trigger a 2 tick time delay - storing a
+          // tick 1: already a dueTime - replace value with b
+          // tick 2: the callback 
+          expectStream(result, { strict: false }).toBe('-------f---|');
+        });
+      });
+
+      it("should emit each value after sufficient silence", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a---b---c|', { a: 1, b: 2, c: 3 });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('--(1)---(2)--(3|)', { 1: 1, 2: 2, 3: 3 });
+        });
+      });
+
+      it("should emit latest from burst then next after silence", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abc---d----|', );
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('----c---d--|', );
+        });
+      });
+
+      it("should handle multiple bursts", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abc---def---g--|');
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('----c-----f---g|');
+        });
+      });
+
+      it("should handle varying burst lengths", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a---bc------(de)---|');
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('--a----c------e-|');
+        });
+      });
+
+      it("should handle exact debounce timing", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a--b|');
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('--a-(b|)');
+        });
+      });
+    });
+
+    describe("Error Handling", () => {
+      it("should propagate source errors immediately", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a#', { a: 1 });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result).toBe('-#');
+        });
+      });
+
+      it("should handle error during debounce period", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('ab#', { a: 1, b: 2 });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result).toBe('--#');
+        });
+      });
+
+      it("should handle error after debounce emission", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a---b#');
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result).toBe('--a--#');
+        });
+      });
+
+      it("should not emit debounced value if error occurs", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abc-#');
+          const result = pipe(stream, debounceTime(5));
+          expectStream(result).toBe('----#');
+        });
+      });
+    });
+
+    describe("Stream Completion", () => {
+      it("should emit latest value on completion", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abc|', { a: 1, b: 2, c: 3 });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('---(3|)', { 3: 3 });
+        });
+      });
+
+      it("should emit latest value even with very long debounce", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('ab|', { a: 1, b: 2 });
+          const result = pipe(stream, debounceTime(10));
+          expectStream(result, { strict: false }).toBe('--(2|)', { 2: 2 });
+        });
+      });
+
+      it("should handle immediate completion", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('|');
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result).toBe('|');
+        });
+      });
+
+      it("should handle delayed completion with no values", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('------|');
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result).toBe('------|');
+        });
+      });
+    });
+
+    describe("Data Types", () => {
+      it("should handle string values", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abc|', { a: 'hello', b: 'world', c: 'test' });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('---(c|)', { c: 'test' });
+        });
+      });
+
+      it("should handle object values", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('ab--|', { 
+            a: { id: 1, name: 'Alice' }, 
+            b: { id: 2, name: 'Bob' } 
+          });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('---b|', { b: { id: 2, name: 'Bob' } });
+        });
+      });
+
+      it("should handle boolean values", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abc|', { a: true, b: false, c: true });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('---(c|)', { c: true });
+        });
+      });
+
+      it("should handle null and undefined", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abc|', { a: null, b: undefined, c: 0 });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('---(c|)', { c: 0 });
+        });
+      });
+
+      it("should handle array values", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('ab--|', { a: [1, 2], b: [3, 4, 5] });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('---b|', { b: [3, 4, 5] });
+        });
+      });
+    });
+
+    describe("Edge Cases", () => {
+      it("should handle very short debounce time", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('abcd|');
+          const result = pipe(stream, debounceTime(1));
+          expectStream(result, { strict: false }).toBe('-abcd|');
+        });
+      });
+
+      it("should handle synchronized emissions", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('(abcdef)|', { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 });
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('-(6|)', { 6: 6 });
+        });
+      });
+
+      it("should handle alternating fast and slow patterns", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('ab--(cd)--ef|');
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('---b--d--(f|)');
+        });
+      });
+
+      it("should handle exactly timed emissions", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a---b---c-----|');
+          const result = pipe(stream, debounceTime(3));
+          expectStream(result, { strict: false }).toBe('---a---b---c--|');
+        });
+      });
+
+      it("should handle burst at end of stream", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a----(bcd|)', );
+          const result = pipe(stream, debounceTime(2));
+          expectStream(result, { strict: false }).toBe('--a--(d|)', );
+        });
+      });
+
+      it("should handle single emission followed by long silence", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const stream = cold('a-----------|');
+          const result = pipe(stream, debounceTime(6));
+          expectStream(result, { strict: false }).toBe('------a-----|');
+        });
+      });     
+    });
   });
 });

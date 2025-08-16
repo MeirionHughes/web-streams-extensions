@@ -21,27 +21,43 @@ export function concat<T>(...streams: ReadableStream<T>[]): ReadableStream<T>{
   if(streams.length == 0) throw new Error("must pass at least 1 stream to concat");
   
   let reader: ReadableStreamDefaultReader<T> = null;
+  let flushing = false;
 
   async function flush(controller: ReadableStreamDefaultController<T>) {
-    try {      
-      if(reader == null) { 
-        if(streams.length == 0){
-          controller.close();
-          return;     
-        }
-        reader = streams.shift().getReader();
-      }
+    if (flushing) {
+      // Already flushing, avoid concurrent execution
+      return;
+    }
+    flushing = true;
 
-      while (controller.desiredSize > 0 && reader != null) {
-        let next = await reader.read();
-        // if the current reader is exhausted... 
-        if(next.done){
-          reader.releaseLock();
-          reader = null;
-          // Recursively handle the next stream
-          return flush(controller);
-        } else {
-          controller.enqueue(next.value);
+    try {      
+      while (true) {
+        if(reader == null) { 
+          if(streams.length == 0){
+            controller.close();
+            return;     
+          }
+          reader = streams.shift().getReader();
+        }
+
+        while (controller.desiredSize > 0 && reader != null) {
+          let next = await reader.read();
+          // if the current reader is exhausted... 
+          if(next.done){
+            reader.releaseLock();
+            reader = null;
+            // Continue the outer loop to get the next stream
+            break;
+          } else {
+            controller.enqueue(next.value);
+          }
+        }
+
+        // If reader is null, we need to get the next stream
+        // If reader is not null but desiredSize <= 0, we need to wait for next pull
+        if (reader != null && controller.desiredSize <= 0) {
+          // No more space, exit and wait for next pull
+          return;
         }
       }
     } catch (err) {
@@ -54,6 +70,8 @@ export function concat<T>(...streams: ReadableStream<T>[]): ReadableStream<T>{
         }
         reader = null;
       }
+    } finally {
+      flushing = false;
     }
   }
 
@@ -64,14 +82,18 @@ export function concat<T>(...streams: ReadableStream<T>[]): ReadableStream<T>{
     async pull(controller) {
       return flush(controller);
     },
-    cancel(reason?: any) {
+    async cancel(reason?: any) {
       if(reader){
         try {
-          reader.cancel(reason);
-          reader.releaseLock();
+          await reader.cancel(reason);
         } catch (err) {
           // Ignore cleanup errors
         } finally {
+          try {
+            reader.releaseLock();
+          } catch (err) {
+            // Ignore release errors
+          }
           reader = null;
         }
       }

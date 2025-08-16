@@ -49,7 +49,7 @@ export function last<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableStr
           controller.error(err);
           if (reader) {
             try {
-              reader.cancel(err);
+              await reader.cancel(err);
               reader.releaseLock();
             } catch (e) {
               // Ignore cleanup errors
@@ -61,7 +61,9 @@ export function last<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableStr
       cancel(reason?:any){
         if (reader) {
           try {
-            reader.cancel(reason);
+            reader.cancel(reason).catch(() => {
+              // Ignore cancel errors
+            });
             reader.releaseLock();
           } catch (err) {
             // Ignore cleanup errors

@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { empty, toArray } from "../src/index.js";
 
+
 describe("empty", () => {
   it("should complete immediately without emitting values", async () => {
     const result = await toArray(empty());

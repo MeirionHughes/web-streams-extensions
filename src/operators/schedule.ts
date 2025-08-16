@@ -52,7 +52,7 @@ export function schedule<T>(scheduler: IScheduler): (src: ReadableStream<T>, opt
       // Cleanup on error
       if (reader) {
         try {
-          reader.cancel(err);
+          await reader.cancel(err);
           reader.releaseLock();
         } catch (e) {
           // Ignore cleanup errors
@@ -78,7 +78,9 @@ export function schedule<T>(scheduler: IScheduler): (src: ReadableStream<T>, opt
       cancel(reason?: any) {
         if (reader) {
           try {
-            reader.cancel(reason);
+            reader.cancel(reason).catch(() => {
+              // Ignore cancel errors
+            });
             reader.releaseLock();
           } catch (err) {
             // Ignore cleanup errors

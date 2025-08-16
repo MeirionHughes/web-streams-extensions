@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { from, map, toArray, filter, take } from "../src/index.js";
 import { retryPipe, retryPipeValidated } from "../src/retry-pipe.js";
 
+
 describe("retryable pipe", () => {
   it("should retry the entire stream pipeline on error", async () => {
     let attempts = 0;
@@ -157,7 +158,7 @@ describe("retryable pipe", () => {
       expect(delay1).to.be.at.least(90); // Allow some tolerance
       expect(delay2).to.be.at.least(90);
     }
-  }).timeout(5000);
+  })
 
   it("should work with no operators (just options)", async () => {
     let attempts = 0;
@@ -356,6 +357,6 @@ describe("retryable pipe", () => {
         expect(delay1).to.be.at.least(90);
         expect(delay2).to.be.at.least(90);
       }
-    }).timeout(5000);
+    })
   });
 });

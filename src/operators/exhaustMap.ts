@@ -78,7 +78,7 @@ export function exhaustMap<T, R>(projector: ExhaustMapProjector<T, R>): (src: Re
                 // Create AbortController for this projection
                 currentAbortController = new AbortController();
                 
-                // Apply projector to get inner stream
+                // Apply projector to get inner stream (increment index only when projecting)
                 const projected = projector(value, index++, currentAbortController.signal);
                 
                 // Convert projected result to stream
@@ -100,8 +100,20 @@ export function exhaustMap<T, R>(projector: ExhaustMapProjector<T, R>): (src: Re
                     controller.error(err);
                   }
                 });
+              } else {
+                // Exhaust behavior: ignore new values while processing inner stream
+                // If the value is a ReadableStream, cancel it to prevent resource leaks
+                if (value && typeof value === 'object' && 'getReader' in value && typeof value.getReader === 'function') {
+                  try {
+                    const reader = (value as unknown as ReadableStream<any>).getReader();
+                    await reader.cancel().catch(() => {}); // Ignore cancellation errors
+                    reader.releaseLock();
+                  } catch {
+                    // Ignore errors during cleanup
+                  }
+                }
+                // Don't increment index for ignored values - they are not projected at all
               }
-              // else ignore the new inner stream (exhaust behavior)
             }
           } catch (err) {
             if (!cancelled) {
@@ -182,6 +194,7 @@ export function exhaustMap<T, R>(projector: ExhaustMapProjector<T, R>): (src: Re
 
       cancel() {
         cancelled = true;
+        
         // Abort any ongoing projection
         if (currentAbortController) {
           currentAbortController.abort();

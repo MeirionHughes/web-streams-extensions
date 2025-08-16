@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { timer, toArray, pipe, take } from "../src/index.js";
 import { sleep } from "../src/utils/sleep.js";
 
+
 describe("timer", () => {
   it("should emit single value after delay", async () => {
     const result = await toArray(timer(10)); // Use smaller delay for faster test

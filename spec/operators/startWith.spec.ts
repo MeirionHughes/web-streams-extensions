@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { from, pipe, startWith, toArray } from "../../src/index.js";
 
+
 describe("startWith", () => {
   it("should prepend single value", async () => {
     const input = [2, 3, 4];

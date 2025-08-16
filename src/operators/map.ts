@@ -31,8 +31,10 @@ export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T
         let next = await reader.read();
         if (next.done) {
           controller.close();
-          reader.releaseLock();
-          reader = null;
+          if (reader) {
+            reader.releaseLock();
+            reader = null;
+          }
         } else {
           let mapped = await select(next.value, index++);
           if (mapped !== undefined)
@@ -43,7 +45,7 @@ export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T
       controller.error(err);
       if (reader) {
         try {
-          reader.cancel(err);
+          await reader.cancel(err);
           reader.releaseLock();
         } catch (e) {
           // Ignore cleanup errors
@@ -65,7 +67,9 @@ export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T
       cancel(reason?: any){        
         if (reader) {
           try {
-            reader.cancel(reason);
+            reader.cancel(reason).catch(() => {
+              // Ignore cancel errors
+            });
             reader.releaseLock();
           } catch (err) {
             // Ignore cleanup errors

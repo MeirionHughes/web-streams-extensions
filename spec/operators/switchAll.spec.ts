@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { from, pipe, toArray, switchAll, Subject, timer, throwError, of } from "../../src/index.js";
 
+
 describe("switchAll", () => {
   it("should switch to latest stream", async () => {
     const result = await toArray(pipe(
@@ -207,6 +208,7 @@ describe("switchAll", () => {
     const result = await reader.read();
     expect(result.value).to.equal(1);
     
+    await reader.cancel();
     reader.releaseLock();
   });
 

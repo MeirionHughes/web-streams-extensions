@@ -37,6 +37,7 @@ import { from } from "../from.js";
 export function exhaustAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
   return function (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, { highWaterMark = 16 } = {}) {
     let cancelled = false;
+    const ignoredStreams: ReadableStream<T>[] = []; // Track ignored streams for cleanup
     
     return new ReadableStream<T>({
       async start(controller) {
@@ -81,8 +82,10 @@ export function exhaustAll<T>(): (src: ReadableStream<ReadableStream<T> | Promis
                     controller.error(err);
                   }
                 });
+              } else {
+                // Track ignored stream for cleanup (exhaust behavior)
+                ignoredStreams.push(innerStream);
               }
-              // else ignore the new inner stream (exhaust behavior)
             }
           } catch (err) {
             if (!cancelled) {
@@ -151,8 +154,20 @@ export function exhaustAll<T>(): (src: ReadableStream<ReadableStream<T> | Promis
         });
       },
 
-      cancel() {
+      async cancel() {
         cancelled = true;
+        
+        // Cancel all ignored streams to prevent resource leaks
+        for (const ignoredStream of ignoredStreams) {
+          try {
+            const reader = ignoredStream.getReader();
+            await reader.cancel().catch(() => {}); // Ignore cancellation errors
+            reader.releaseLock();
+          } catch {
+            // Ignore errors during cleanup
+          }
+        }
+        ignoredStreams.length = 0; // Clear the array
       }
     }, { highWaterMark });
   };

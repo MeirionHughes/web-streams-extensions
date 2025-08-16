@@ -152,18 +152,39 @@ export function retryPipe(
 
   const { retries = 3, delay, highWaterMark = 1 } = options;
 
-  // Return a ReadableStream that handles retries internally
   let reader: ReadableStreamDefaultReader<any> | null = null;
   let attempts = 0;
+  let cancelled = false;
+  let currentTimer: NodeJS.Timeout | null = null;
 
-  async function createStreamAndReader() {
+  async function cleanupReader() {
     if (reader) {
+      try {
+        await reader.cancel();
+      } catch (e) {
+        // Ignore cancel errors
+      }
       try {
         reader.releaseLock();
       } catch (e) {
-        // Ignore cleanup errors
+        // Ignore release errors
       }
       reader = null;
+    }
+  }
+
+  function clearTimer() {
+    if (currentTimer) {
+      clearTimeout(currentTimer);
+      currentTimer = null;
+    }
+  }
+
+  async function createStreamAndReader() {
+    await cleanupReader();
+    
+    if (cancelled) {
+      return;
     }
 
     attempts++;
@@ -182,88 +203,71 @@ export function retryPipe(
     reader = resultStream.getReader();
   }
 
-  async function flush(controller: ReadableStreamDefaultController<any>) {
-    try {
-      while (controller.desiredSize > 0 && reader != null) {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.close();
-          if (reader) {
-            reader.releaseLock();
-            reader = null;
+  async function tryWithRetry(controller: ReadableStreamDefaultController<any>): Promise<void> {
+    let lastError: any;
+    const maxAttempts = retries + 1; // retries is additional attempts after initial
+    
+    while (attempts < maxAttempts && !cancelled) {
+      try {
+        await createStreamAndReader();
+        
+        // Read all values from the stream
+        while (!cancelled && reader) {
+          const { done, value } = await reader.read();
+          if (done) {
+            controller.close();
+            await cleanupReader();
+            return;
           }
-          return;
-        }
-        controller.enqueue(value);
-      }
-    } catch (error) {
-      // Handle errors during reading - retry if we haven't exceeded attempts
-      if (attempts > retries) {
-        controller.error(error);
-        if (reader) {
-          try {
-            reader.cancel(error);
-            reader.releaseLock();
-          } catch (e) {
-            // Ignore cleanup errors
+          if (!cancelled) {
+            controller.enqueue(value);
           }
-          reader = null;
         }
-        return;
+        return; // Success
+        
+      } catch (error) {
+        lastError = error;
+        await cleanupReader();
+        
+        if (attempts >= maxAttempts || cancelled) {
+          break;
+        }
+        
+        // Wait before retry if delay is specified
+        if (delay && !cancelled) {
+          await new Promise<void>((resolve, reject) => {
+            currentTimer = setTimeout(() => {
+              currentTimer = null;
+              resolve();
+            }, delay);
+          });
+        }
       }
-      
-      // Wait before retry if delay is specified
-      if (delay && attempts <= retries) {
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-      
-      // Retry by creating a new stream
-      await createStreamAndReader();
-      await flush(controller);
+    }
+    
+    // All retries failed or cancelled
+    if (!cancelled) {
+      controller.error(lastError || new Error("Cancelled"));
     }
   }
 
   return new ReadableStream({
     async start(controller) {
-      let lastError: any;
-      
-      while (attempts <= retries) {
-        try {
-          await createStreamAndReader();
-          await flush(controller);
-          return; // Success, exit the retry loop
-        } catch (error) {
-          lastError = error;
-          
-          if (attempts > retries) {
-            controller.error(lastError);
-            return;
-          }
-          
-          // Wait before retry if delay is specified
-          if (delay && attempts <= retries) {
-            await new Promise(resolve => setTimeout(resolve, delay));
-          }
+      try {
+        await tryWithRetry(controller);
+      } catch (error) {
+        if (!cancelled) {
+          controller.error(error);
         }
       }
-      
-      // If we get here, all retries failed
-      controller.error(lastError);
     },
     async pull(controller) {
-      await flush(controller);
+      // Pull is handled in start() for retry logic
     },
-    cancel(reason?: any) {
-      if (reader) {
-        try {
-          reader.cancel(reason);
-          reader.releaseLock();
-        } catch (err) {
-          // Ignore cleanup errors
-        } finally {
-          reader = null;
-        }
-      }
+    async cancel(reason?: any) {
+      cancelled = true;
+      clearTimer();
+      await cleanupReader();
     }
   }, { highWaterMark });
 }
@@ -295,8 +299,10 @@ export async function retryPipeValidated<T>(
   const { retries = 3, delay, highWaterMark = 1 } = options;
   let attempts = 0;
   let lastError: any;
+  let currentTimer: NodeJS.Timeout | null = null;
+  const maxAttempts = retries + 1; // retries is additional attempts after initial
 
-  while (attempts <= retries) {
+  while (attempts < maxAttempts) {
     try {
       attempts++;
       
@@ -313,7 +319,16 @@ export async function retryPipeValidated<T>(
       
       // Just verify we can get a reader without consuming
       const reader = validationStream.getReader();
-      reader.releaseLock();
+      try {
+        await reader.cancel(); // Properly cancel the test stream
+      } catch (e) {
+        // Ignore cancel errors
+      }
+      try {
+        reader.releaseLock();
+      } catch (e) {
+        // Ignore release errors
+      }
       
       // Validation succeeded, return a proper retryPipe
       return retryPipe(streamFactory, ...args);
@@ -321,13 +336,24 @@ export async function retryPipeValidated<T>(
     } catch (error) {
       lastError = error;
       
-      if (attempts > retries) {
+      if (attempts >= maxAttempts) {
         throw lastError;
       }
       
       // Wait before retry if delay is specified
-      if (delay && attempts <= retries) {
-        await new Promise(resolve => setTimeout(resolve, delay));
+      if (delay && attempts < maxAttempts) {
+        await new Promise<void>((resolve) => {
+          currentTimer = setTimeout(() => {
+            currentTimer = null;
+            resolve();
+          }, delay);
+        });
+      }
+    } finally {
+      // Clean up any timer
+      if (currentTimer) {
+        clearTimeout(currentTimer);
+        currentTimer = null;
       }
     }
   }

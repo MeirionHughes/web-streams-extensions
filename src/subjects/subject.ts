@@ -15,6 +15,7 @@ export class Subject<T> implements ISubject<T> {
   private _closingResolve: (value: unknown) => void;
   private _closing: Promise<void>;
   private _writableStream: WritableStream<T> | null = null;
+  private _writableController: WritableStreamDefaultController | null = null;
   private _abortController: AbortController | null = null;
 
   constructor() {
@@ -95,12 +96,14 @@ export class Subject<T> implements ISubject<T> {
     
     this._writableStream = new WritableStream(
       {
+        start(controller) {
+          self._writableController = controller;
+        },
         write(chunk, controller) {
           if (self.closed) {
-            // When subject is closed, error the controller to abort the pipe
-            const error = new Error("Subject is closed");
-            controller.error(error);
-            throw error;
+            // When subject is closed, error the controller to signal the pipe to stop
+            controller.error(new Error("Subject is closed"));
+            return;
           }
           if (controller.signal.aborted) {
             self._error(controller.signal.reason || new Error("Aborted"));

@@ -3,6 +3,7 @@ import { sleep } from "../../src/utils/sleep.js";
 import { toArray, from, pipe,  buffer, take, debounceTime, tap, timeout } from '../../src/index.js';
 
 
+
 describe("timeout", () => {
   it("will consume original stream if time between chunks less-than duration", async () => {
     let input =  async function*(){yield 1, yield 2, await sleep(50), yield 3};

@@ -14,27 +14,21 @@
  *   from([1, 2, 3, 4]),
  *   scan((acc, val) => acc + val, 0)
  * )
- * // Emits: 0, 1, 3, 6, 10
+ * // Emits: 1, 3, 6, 10
  * ```
  */
 export function scan<T, R = T>(
   accumulator: (acc: R, value: T, index: number) => R | Promise<R>,
-  seed: R
+  seed?: R
 ): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
   return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
     let reader: ReadableStreamDefaultReader<T> = null;
-    let acc = seed;
+    let acc: R | undefined = seed;
     let index = 0;
-    let seedEmitted = false;
+    let hasEmittedFirst = false;
 
     async function flush(controller: ReadableStreamDefaultController<R>) {
       try {
-        // Emit seed value first
-        if (!seedEmitted && controller.desiredSize > 0) {
-          seedEmitted = true;
-          controller.enqueue(acc);
-        }
-
         while (controller.desiredSize > 0 && reader != null) {
           let { done, value } = await reader.read();
           
@@ -43,8 +37,17 @@ export function scan<T, R = T>(
             return;
           }
 
-          acc = await accumulator(acc, value, index++);
-          controller.enqueue(acc);
+          if (!hasEmittedFirst && seed === undefined) {
+            // No seed provided, emit first value directly
+            hasEmittedFirst = true;
+            acc = value as unknown as R;
+            controller.enqueue(acc);
+            index++;
+          } else {
+            // Apply accumulator function
+            acc = await accumulator(acc!, value, index++);
+            controller.enqueue(acc);
+          }
         }
       } catch (err) {
         controller.error(err);

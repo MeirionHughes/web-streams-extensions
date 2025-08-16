@@ -39,17 +39,19 @@ export function timer(dueTime: number, intervalDuration?: number): ReadableStrea
       dueTimer = setTimeout(() => {
         try {
           controller.enqueue(count++);
-          
+
           // If interval is specified, set up recurring timer
           if (intervalDuration !== undefined) {
             intervalTimer = setInterval(() => {
-              try {
-                controller.enqueue(count++);
-              } catch (err) {
-                // Controller might be closed, clear timer
-                if (intervalTimer) {
-                  clearInterval(intervalTimer);
-                  intervalTimer = null;
+              if (intervalTimer) {
+                try {
+                  controller.enqueue(count++);
+                } catch (err) {
+                  // Controller might be closed, clear timer
+                  if (intervalTimer) {
+                    clearInterval(intervalTimer);
+                    intervalTimer = null;
+                  }
                 }
               }
             }, intervalDuration);

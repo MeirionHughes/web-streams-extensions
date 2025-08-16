@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { Subject } from "../src/index.js";
 import { toArray, from, pipe, filter, buffer, map, first, toPromise } from '../src/index.js';
 
+
 describe("pipe", () => {
   it("can pipe multiple operators", async () => {
     let inputA = [1, 2, 3, 4];

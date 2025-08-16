@@ -34,6 +34,12 @@ export async function toArray<T>(src: ReadableLike<T> | ReadableStream<T>): Prom
       if (!done) res.push(next.value);
     }
   } finally {
+    // Always cancel the reader to ensure proper cleanup of resources
+    try {
+      await reader.cancel();
+    } catch (e) {
+      // Ignore cancellation errors (stream might already be closed)
+    }
     reader.releaseLock();    
   }
   return res;

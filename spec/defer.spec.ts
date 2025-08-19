@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { toArray, from, defer } from '../src/index.js';
 
+
 describe("defer", () => {
   it("can defer stream behind promise", async () => {
     let inputA = [1, 2, 3, 4];
@@ -131,6 +132,10 @@ describe("defer", () => {
       await reader.cancel("test");
     } catch (err) {
       // The cancel error should be handled internally
+      expect(err).to.be.instanceOf(Error);
     }
+    
+    // Wait a moment for any background cleanup to complete
+    await new Promise(resolve => setTimeout(resolve, 10));
   })
 })

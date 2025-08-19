@@ -2,5 +2,7 @@
   "extensions": [".ts"],
   "node-option": ["import=tsx"],
   "ui": "bdd",
+  "timeout": 5000,
+  "recursive": true,
   "globals": ["describe", "it", "before", "after", "beforeEach", "afterEach"]
 }

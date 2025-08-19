@@ -34,8 +34,10 @@ export function buffer<T>(count: number): (src: ReadableStream<T>, opts?: { high
               buffer = [];
             }
             controller.close();
-            reader.releaseLock();
-            reader = null;                     
+            if (reader) {
+              reader.releaseLock();
+              reader = null;
+            }                     
           }else {
             buffer.push(next.value);
             // Emit buffer when it reaches the target count
@@ -49,7 +51,7 @@ export function buffer<T>(count: number): (src: ReadableStream<T>, opts?: { high
         controller.error(err);
         if (reader) {
           try {
-            reader.cancel(err);
+            await reader.cancel(err);
             reader.releaseLock();
           } catch (e) {
             // Ignore cleanup errors
@@ -67,10 +69,10 @@ export function buffer<T>(count: number): (src: ReadableStream<T>, opts?: { high
       pull(controller) {
         return flush(controller);
       },
-      cancel(reason?:any) {
+      async cancel(reason?:any) {
         if(reader){
           try {
-            reader.cancel(reason);
+            await reader.cancel(reason);
             reader.releaseLock();
           } catch (err) {
             // Ignore cleanup errors

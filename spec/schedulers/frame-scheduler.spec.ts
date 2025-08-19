@@ -1,3 +1,4 @@
+
 import { expect } from 'chai';
 import { FrameScheduler } from '../../src/schedulers/frame-scheduler.js';
 
@@ -13,49 +14,56 @@ describe('FrameScheduler', () => {
     expect(scheduler.schedule).to.be.a('function');
   });
 
-  it('should execute callback with schedule', (done) => {
+  it('should execute callback with schedule', async () => {
     let executed = false;
-    scheduler.schedule(() => {
-      executed = true;
-      expect(executed).to.be.true;
-      done();
+    
+    await new Promise<void>((resolve) => {
+      scheduler.schedule(() => {
+        executed = true;
+        expect(executed).to.be.true;
+        resolve();
+      });
+      // Should not execute immediately
+      expect(executed).to.be.false;
     });
-    // Should not execute immediately
-    expect(executed).to.be.false;
   });
 
-  it('should work with multiple consecutive schedule calls', (done) => {
+  it('should work with multiple consecutive schedule calls', async () => {
     const results: number[] = [];
     let completed = 0;
     
-    const checkComplete = () => {
-      completed++;
-      if (completed === 3) {
-        expect(results).to.have.lengthOf(3);
-        expect(results).to.include.members([1, 2, 3]);
-        done();
-      }
-    };
-    
-    scheduler.schedule(() => { results.push(1); checkComplete(); });
-    scheduler.schedule(() => { results.push(2); checkComplete(); });
-    scheduler.schedule(() => { results.push(3); checkComplete(); });
+    await new Promise<void>((resolve) => {
+      const checkComplete = () => {
+        completed++;
+        if (completed === 3) {
+          expect(results).to.have.lengthOf(3);
+          expect(results).to.include.members([1, 2, 3]);
+          resolve();
+        }
+      };
+      
+      scheduler.schedule(() => { results.push(1); checkComplete(); });
+      scheduler.schedule(() => { results.push(2); checkComplete(); });
+      scheduler.schedule(() => { results.push(3); checkComplete(); });
+    });
   });
 
-  it('should handle concurrent schedule calls', (done) => {
+  it('should handle concurrent schedule calls', async () => {
     let completed = 0;
     const total = 5;
     
-    const checkComplete = () => {
-      completed++;
-      if (completed === total) {
-        done();
+    await new Promise<void>((resolve) => {
+      const checkComplete = () => {
+        completed++;
+        if (completed === total) {
+          resolve();
+        }
+      };
+      
+      for (let i = 0; i < total; i++) {
+        scheduler.schedule(checkComplete);
       }
-    };
-    
-    for (let i = 0; i < total; i++) {
-      scheduler.schedule(checkComplete);
-    }
+    });
   });
 
   describe('environment-specific behavior', () => {
@@ -72,7 +80,7 @@ describe('FrameScheduler', () => {
       (globalThis as any).setImmediate = originalSetImmediate;
     });
 
-    it('should use requestAnimationFrame when available', (done) => {
+    it('should use requestAnimationFrame when available', async () => {
       let rafCalled = false;
       const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
       
@@ -85,14 +93,16 @@ describe('FrameScheduler', () => {
       // Create scheduler after setting up the mock
       const scheduler = new FrameScheduler();
       
-      scheduler.schedule(() => {
-        expect(rafCalled).to.be.true;
-        globalThis.requestAnimationFrame = originalRequestAnimationFrame;
-        done();
+      await new Promise<void>((resolve) => {
+        scheduler.schedule(() => {
+          expect(rafCalled).to.be.true;
+          globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+          resolve();
+        });
       });
     });
 
-    it('should fall back to setImmediate when requestAnimationFrame is not available', (done) => {
+    it('should fall back to setImmediate when requestAnimationFrame is not available', async () => {
       const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
       const originalSetImmediate = (globalThis as any).setImmediate;
       
@@ -107,15 +117,17 @@ describe('FrameScheduler', () => {
       // Create scheduler after setting up the environment
       const scheduler = new FrameScheduler();
 
-      scheduler.schedule(() => {
-        expect(setImmediateCalled).to.be.true;
-        globalThis.requestAnimationFrame = originalRequestAnimationFrame;
-        (globalThis as any).setImmediate = originalSetImmediate;
-        done();
+      await new Promise<void>((resolve) => {
+        scheduler.schedule(() => {
+          expect(setImmediateCalled).to.be.true;
+          globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+          (globalThis as any).setImmediate = originalSetImmediate;
+          resolve();
+        });
       });
     });
 
-    it('should fall back to setTimeout when neither requestAnimationFrame nor setImmediate are available', (done) => {
+    it('should fall back to setTimeout when neither requestAnimationFrame nor setImmediate are available', async () => {
       const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
       const originalSetImmediate = (globalThis as any).setImmediate;
       const originalSetTimeout = globalThis.setTimeout;
@@ -133,16 +145,18 @@ describe('FrameScheduler', () => {
       // Create scheduler after setting up the environment
       const scheduler = new FrameScheduler();
 
-      scheduler.schedule(() => {
-        expect(setTimeoutCalled).to.be.true;
-        globalThis.requestAnimationFrame = originalRequestAnimationFrame;
-        (globalThis as any).setImmediate = originalSetImmediate;
-        globalThis.setTimeout = originalSetTimeout;
-        done();
+      await new Promise<void>((resolve) => {
+        scheduler.schedule(() => {
+          expect(setTimeoutCalled).to.be.true;
+          globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+          (globalThis as any).setImmediate = originalSetImmediate;
+          globalThis.setTimeout = originalSetTimeout;
+          resolve();
+        });
       });
     });
 
-    it('should handle requestAnimationFrame as non-function', (done) => {
+    it('should handle requestAnimationFrame as non-function', async () => {
       const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
       const originalSetImmediate = (globalThis as any).setImmediate;
       
@@ -157,15 +171,17 @@ describe('FrameScheduler', () => {
       // Create scheduler after setting up the environment
       const scheduler = new FrameScheduler();
 
-      scheduler.schedule(() => {
-        expect(setImmediateCalled).to.be.true;
-        globalThis.requestAnimationFrame = originalRequestAnimationFrame;
-        (globalThis as any).setImmediate = originalSetImmediate;
-        done();
+      await new Promise<void>((resolve) => {
+        scheduler.schedule(() => {
+          expect(setImmediateCalled).to.be.true;
+          globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+          (globalThis as any).setImmediate = originalSetImmediate;
+          resolve();
+        });
       });
     });
 
-    it('should handle missing globalThis', (done) => {
+    it('should handle missing globalThis', async () => {
       const originalGlobalThis = globalThis;
       
       try {
@@ -181,8 +197,10 @@ describe('FrameScheduler', () => {
         const scheduler = new FrameScheduler();
         
         // Should fall back to setTimeout without throwing
-        scheduler.schedule(() => {
-          done();
+        await new Promise<void>((resolve) => {
+          scheduler.schedule(() => {
+            resolve();
+          });
         });
       } finally {
         if (typeof window !== 'undefined') {
@@ -195,16 +213,18 @@ describe('FrameScheduler', () => {
   });
 
   describe('performance characteristics', () => {
-    it('should not block for extended periods', (done) => {
+    it('should not block for extended periods', async () => {
       const start = Date.now();
-      scheduler.schedule(() => {
-        const elapsed = Date.now() - start;
-        expect(elapsed).to.be.lessThan(100);
-        done();
+      await new Promise<void>((resolve) => {
+        scheduler.schedule(() => {
+          const elapsed = Date.now() - start;
+          expect(elapsed).to.be.lessThan(100);
+          resolve();
+        });
       });
     });
 
-    it('should allow other operations to run between schedule calls', (done) => {
+    it('should allow other operations to run between schedule calls', async () => {
       const results: string[] = [];
       
       scheduler.schedule(() => results.push('scheduled1'));
@@ -213,37 +233,41 @@ describe('FrameScheduler', () => {
       Promise.resolve().then(() => results.push('microtask2'));
       
       // Check results after all have had time to execute
-      setTimeout(() => {
-        expect(results).to.have.lengthOf(4);
-        expect(results).to.include.members(['scheduled1', 'microtask1', 'scheduled2', 'microtask2']);
-        done();
-      }, 50);
+      await new Promise<void>((resolve) => {
+        setTimeout(() => {
+          expect(results).to.have.lengthOf(4);
+          expect(results).to.include.members(['scheduled1', 'microtask1', 'scheduled2', 'microtask2']);
+          resolve();
+        }, 50);
+      });
     });
 
-    it('should work with animation-like timing patterns', (done) => {
+    it('should work with animation-like timing patterns', async () => {
       const frameCount = 3;
       const frameTimes: number[] = [];
       let completed = 0;
       
-      const scheduleFrame = () => {
-        const start = performance.now();
-        scheduler.schedule(() => {
-          frameTimes.push(performance.now() - start);
-          completed++;
-          
-          if (completed < frameCount) {
-            scheduleFrame();
-          } else {
-            // All frame times should be reasonable (not too long)
-            frameTimes.forEach(time => {
-              expect(time).to.be.lessThan(100); // Each frame should complete within 100ms
-            });
-            done();
-          }
-        });
-      };
-      
-      scheduleFrame();
+      await new Promise<void>((resolve) => {
+        const scheduleFrame = () => {
+          const start = performance.now();
+          scheduler.schedule(() => {
+            frameTimes.push(performance.now() - start);
+            completed++;
+            
+            if (completed < frameCount) {
+              scheduleFrame();
+            } else {
+              // All frame times should be reasonable (not too long)
+              frameTimes.forEach(time => {
+                expect(time).to.be.lessThan(100); // Each frame should complete within 100ms
+              });
+              resolve();
+            }
+          });
+        };
+        
+        scheduleFrame();
+      });
     });
   });
 });

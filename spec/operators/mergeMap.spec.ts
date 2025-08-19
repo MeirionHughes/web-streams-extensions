@@ -1,8 +1,13 @@
 import { expect } from "chai";
 import { toArray, from, pipe, mergeMap } from '../../src/index.js';
 import { Subject } from '../../src/subjects/subject.js';
+import { parseMarbles } from '../../src/testing/parse-marbles.js';
+import { VirtualTimeScheduler } from '../../src/testing/virtual-tick-scheduler.js';
+
 
 describe("mergeMap operator", () => {
+
+  describe("Real Time", () => {
 
   it("should map each value to a stream and flatten", async () => {
     const result = await toArray(
@@ -254,4 +259,178 @@ describe("mergeMap operator", () => {
     expect(result).to.have.length(8);
     expect(result).to.include.members([1, 100, 11, 1100, 2, 200, 12, 1200]);
   });
+
+  }); // Real Time
+
+  describe("Virtual Time", () => {
+    it("should map each value to inner streams and merge concurrently", async () => {
+      const scheduler = new VirtualTimeScheduler();
+      await scheduler.run(async ({ cold, expectStream }) => {
+        const source = cold("a-b-c|", { a: 1, b: 2, c: 3 });
+        
+        const result = pipe(
+          source,
+          mergeMap((n: number) => cold("(x|)", { x: n * 10 }))
+        );
+        
+        expectStream(result).toBe("a-b-c|", { a: 10, b: 20, c: 30 });
+      });
+    });
+
+    it("should handle inner streams with different timings", async () => {
+      const scheduler = new VirtualTimeScheduler();
+      await scheduler.run(async ({ cold, expectStream }) => {
+        const source = cold("a-b|", { a: 1, b: 2 });
+        
+        const result = pipe(
+          source,
+          mergeMap((n: number) => {
+            if (n === 1) return cold("--x|", { x: 'A' });
+            return cold("-y|", { y: 'B' });
+          })
+        );
+        
+        expectStream(result).toBe("--AB|");
+      });
+    });
+
+    it("should respect concurrency limit", async () => {
+      const scheduler = new VirtualTimeScheduler();
+      await scheduler.run(async ({ cold, expectStream }) => {
+        const source = cold("a-b-c|", { a: 1, b: 2, c: 3 });
+        
+        const result = pipe(
+          source,
+          mergeMap((n: number) => cold("--x|", { x: n }), 2)
+        );
+        
+        // Only 2 concurrent, third waits for first to complete
+        expectStream(result).toBe("--a-b-c|", { a: 1, b: 2, c: 3 });
+      });
+    });
+
+    it("should handle empty inner streams", async () => {
+      const scheduler = new VirtualTimeScheduler();
+      await scheduler.run(async ({ cold, expectStream }) => {
+        const source = cold("a-b-c|");
+        
+        const result = pipe(
+          source,
+          mergeMap(() => cold("|"))
+        );
+        
+        expectStream(result).toBe("-----|");
+      });
+    });
+
+    it("should propagate inner stream errors", async () => {
+      const scheduler = new VirtualTimeScheduler();
+      await scheduler.run(async ({ cold, expectStream }) => {
+        const error = new Error("Inner error");
+        const source = cold("a-b|", { a: 1, b: 2 });
+        
+        const result = pipe(
+          source,
+          mergeMap((n: number) => {
+            if (n === 2) return cold("-#", {}, error);
+            return cold("-x|", { x: n });
+          })
+        );
+        
+        expectStream(result).toBe("-a-#", { a: 1 }, error);
+      });
+    });
+
+    it("should handle projector function errors", async () => {
+      const scheduler = new VirtualTimeScheduler();
+      await scheduler.run(async ({ cold, expectStream }) => {
+        const error = new Error("Projector error");
+        const source = cold("a-b|", { a: 1, b: 2 });
+        
+        const result = pipe(
+          source,
+          mergeMap((n: number) => {
+            if (n === 2) throw error;
+            return cold("-x|", { x: n });
+          })
+        );
+        
+        expectStream(result).toBe("-a#", { a: 1 }, error);
+      });
+    });
+
+    it("should handle multiple values from inner streams", async () => {
+      const scheduler = new VirtualTimeScheduler();
+      await scheduler.run(async ({ cold, expectStream }) => {
+        const source = cold("a-b|", { a: 1, b: 2 });
+        
+        const result = pipe(
+          source,
+          mergeMap((n: number) => cold("x-y|", { x: n, y: n + 10 }))
+        );
+        
+        expectStream(result).toBe("a-(bc)-d|", { a: 1, b: 11, c: 2, d: 12 });
+      });
+    });
+
+    it("should handle immediate completion of inner streams", async () => {
+      const scheduler = new VirtualTimeScheduler();
+      await scheduler.run(async ({ cold, expectStream }) => {
+        const source = cold("a-b-c|", { a: 1, b: 2, c: 3 });
+        
+        const result = pipe(
+          source,
+          mergeMap((n: number) => cold("(x|)", { x: n }))
+        );
+        
+        expectStream(result).toBe("a-b-c|", { a: 1, b: 2, c: 3 });
+      });
+    });
+
+    it("should handle overlapping inner streams with different completion times", async () => {
+      const scheduler = new VirtualTimeScheduler();
+      await scheduler.run(async ({ cold, expectStream }) => {
+        const source = cold("a-b|", { a: 1, b: 2 });
+        
+        const result = pipe(
+          source,
+          mergeMap((n: number) => {
+            if (n === 1) return cold("--x-y|", { x: 'A', y: 'B' });
+            return cold("-z|", { z: 'C' });
+          })
+        );
+        
+        expectStream(result).toBe("--ACB|");
+      });
+    });
+
+    it("should complete when source and all inner streams complete", async () => {
+      const scheduler = new VirtualTimeScheduler();
+      await scheduler.run(async ({ cold, expectStream }) => {
+        const source = cold("a-b|", { a: 1, b: 2 });
+        
+        const result = pipe(
+          source,
+          mergeMap((n: number) => cold("--x|", { x: n }))
+        );
+        
+        expectStream(result).toBe("--a-b|", { a: 1, b: 2 });
+      });
+    });
+
+    it("should handle index parameter in projector", async () => {
+      const scheduler = new VirtualTimeScheduler();
+      await scheduler.run(async ({ cold, expectStream }) => {
+        const source = cold("a-b-c|", { a: 'x', b: 'y', c: 'z' });
+        
+        const result = pipe(
+          source,
+          mergeMap((value: string, index: number) => cold("(x|)", { x: `${value}${index}` }))
+        );
+        
+        expectStream(result).toBe("a-b-c|", { a: 'x0', b: 'y1', c: 'z2' });
+      });
+    });
+  });
+
 });

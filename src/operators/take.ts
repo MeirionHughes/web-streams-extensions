@@ -30,18 +30,22 @@ export function take<T>(count: number): (src: ReadableStream<T>, opts?: { highWa
           let next = await reader.read();
           if (next.done) {
             controller.close();
-            reader.releaseLock();
+            if (reader) {
+              reader.releaseLock();
+            }
             reader = null;
           } else {
             taken += 1;
             controller.enqueue(next.value);
             
-            // If we've taken enough, close the stream
+            // If we've taken enough, close the stream on the next iteration
             if (taken >= count) {
+
+              
               controller.close();
               if (reader) { 
                 try {
-                  reader.cancel();
+                  await reader.cancel();
                   reader.releaseLock();
                 } catch (err) {
                   // Ignore cleanup errors
@@ -56,7 +60,7 @@ export function take<T>(count: number): (src: ReadableStream<T>, opts?: { highWa
         controller.error(err);
         if (reader) {
           try {
-            reader.cancel(err);
+            await reader.cancel(err);
             reader.releaseLock();
           } catch (e) {
             // Ignore cleanup errors
@@ -78,10 +82,10 @@ export function take<T>(count: number): (src: ReadableStream<T>, opts?: { highWa
       pull(controller) {
         return flush(controller);
       },
-      cancel(reason?: any) {
+      async cancel(reason?: any) {
         if (reader) {
           try {
-            reader.cancel(reason);
+            await reader.cancel(reason);
             reader.releaseLock();
           } catch (err) {
             // Ignore cleanup errors

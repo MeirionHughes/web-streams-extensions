@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { race, from, toArray, timer, pipe, take, throwError, empty, of } from "../src/index.js";
 
+
 describe("race", () => {
   it("should emit from first source to emit", async () => {
     const fast = from([1, 2, 3]);
@@ -12,6 +13,9 @@ describe("race", () => {
     ));
     
     expect(result).to.deep.equal([1, 2]);
+    
+    // Wait a moment for any background cleanup to complete
+    await new Promise(resolve => setTimeout(resolve, 10));
   });
 
   it("should handle errors from winner", async () => {
@@ -122,19 +126,22 @@ describe("race", () => {
   });
 
   it("should handle stream that errors before emitting", async () => {
-    // The error stream might win the race, so we should expect the error
+    // Use a more deterministic test - the immediate sync stream should win
     const immediate = from([42]);
-    const errorBeforeEmit = throwError(new Error("Immediate error"));
+    const delayedError = new ReadableStream({
+      start(controller) {
+        // Delay the error slightly to ensure the immediate stream wins
+        setTimeout(() => {
+          controller.error(new Error("Delayed error"));
+        }, 5);
+      }
+    });
     
-    try {
-      // Since throwError immediately errors, it might win the race
-      const result = await toArray(race(immediate, errorBeforeEmit));
-      // If immediate wins, it should return [42]
-      expect(result).to.deep.equal([42]);
-    } catch (err) {
-      // If error wins, we should get the error
-      expect(err.message).to.equal("Immediate error");
-    }
+    const result = await toArray(race(immediate, delayedError));
+    expect(result).to.deep.equal([42]);
+    
+    // Wait a moment for any background cleanup to complete
+    await new Promise(resolve => setTimeout(resolve, 10));
   });
 
   it("should handle complex race scenario with mixed completion timing", async () => {

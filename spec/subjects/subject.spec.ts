@@ -3,6 +3,7 @@ import { first, from, map, pipe, take, tap, toArray, toPromise } from '../../src
 import { Subject } from "../../src/subjects/subject.js";
 import { sleep } from '../../src/utils/sleep.js';
 
+
 describe("subject", () => {
   it("can observe with multiple readers - manual write", async () => {
     let input = [1, 2, 3, 4];
@@ -82,8 +83,10 @@ describe("subject", () => {
     let subject = new Subject();
     let pulled = [];
 
-    // Start the pipe operation
-    const pipePromise = pipe(src.readable).pipeTo(subject.writable);
+    // Start the pipe operation and handle potential errors
+    const pipePromise = pipe(src.readable).pipeTo(subject.writable).catch((error) => {
+      // Expected: pipe will fail when subject is completed
+    });
 
     let outputTask = toArray(subject.readable);
     let outputTask2 = toArray(src.readable);
@@ -101,6 +104,9 @@ describe("subject", () => {
     await src.next(2);
     await src.complete();
 
+    // Wait for pipe to complete/fail
+    await pipePromise;
+
     let result = await outputTask;
     let result2 = await outputTask2;
 
@@ -113,7 +119,7 @@ describe("subject", () => {
     let subject = new Subject();
     let pulled = [];
 
-    pipe(src.readable, tap(x=>{
+    const pipePromise = pipe(src.readable, tap(x=>{
       pulled.push(x);   
     })).pipeTo(subject.writable);
 
@@ -122,10 +128,21 @@ describe("subject", () => {
     await src.next(1);
     await sleep(1);
     await subject.complete();
+    
+    // The pipe should be aborted now, so these next() calls
+    // should not cause issues
     for(let i=2; i< 20; i++){
-      src.next(i);
+      await src.next(i);
     }
     await src.complete();
+    
+    // Wait for the pipe to finish (it should error/abort)
+    try {
+      await pipePromise;
+    } catch (error) {
+      // Expected: the pipe should error when subject closes
+    }
+    
     await sleep(1);
 
     let result = await outputTask;
@@ -138,9 +155,12 @@ describe("subject", () => {
   it("completing a writable completes subject", async () => {
     let subject = new Subject();
 
-    pipe(from([1, 2, 3, 4])).pipeTo(subject.writable);
+    const pipePromise = pipe(from([1, 2, 3, 4])).pipeTo(subject.writable);
 
     let result = await toArray(subject.readable);
+
+    // Wait for pipe to complete
+    await pipePromise;
 
     expect(result).to.be.deep.eq([1, 2, 3, 4]);
     expect(subject.closed).to.be.true;
@@ -150,19 +170,24 @@ describe("subject", () => {
     let subject = new Subject();
     let result = null;
 
-    pipe(new ReadableStream({
+    const pipePromise = pipe(new ReadableStream({
       start(controller) {
       },
       pull(controller) {
         controller.error("foo");
       }
-    })).pipeTo(subject.writable);
+    })).pipeTo(subject.writable).catch((error) => {
+      // Handle pipe error
+    });
 
     try {
       let result = await toArray(subject.readable);
     } catch (err) {
       result = err;
     }
+
+    // Wait for pipe to complete
+    await pipePromise;
 
     expect(result).to.be.eq('foo');
   })

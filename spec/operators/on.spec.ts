@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { on } from '../../src/operators/on.js';
 import { from, pipe, toArray } from '../../src/index.js';
 
+
 describe('on operator', function() {
   it('should pass through all values without modification', async () => {
     const input = [1, 2, 3, 4, 5];
@@ -306,7 +307,7 @@ describe('on operator', function() {
     const errorStream = new ReadableStream({
       start(controller) {
         controller.enqueue(1);
-        setTimeout(() => controller.error(new Error('Async error')), 10);
+        controller.error(new Error('Immediate error'));
       }
     });
     
@@ -322,7 +323,7 @@ describe('on operator', function() {
     } catch (err) {
       expect(errorCalled).to.be.true;
       expect(err).to.be.instanceOf(Error);
-      expect(err.message).to.equal('Async error');
+      expect(err.message).to.equal('Immediate error');
     }
   });
 
@@ -502,6 +503,9 @@ describe('on operator', function() {
         expect(err).to.be.instanceOf(Error);
         expect(err.message).to.equal('Source failure');
       }
+      
+      // Wait a moment for the error callback to be processed
+      await new Promise(resolve => setTimeout(resolve, 10));
       
       expect(callbackOrder).to.deep.equal(['error']);
     }

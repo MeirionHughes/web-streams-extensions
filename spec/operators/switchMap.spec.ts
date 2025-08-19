@@ -1,9 +1,13 @@
 import { expect } from "chai";
-import { from, pipe, switchMap, toArray, Subject, map, take } from "../../src/index.js";
+import { from, pipe, switchMap, toArray, Subject, map, take, timeout } from "../../src/index.js";
 import { interval } from "../../src/interval.js";
+import { VirtualTimeScheduler } from "../../src/testing/virtual-tick-scheduler.js";
+import { unlink } from "fs";
+
 
 describe("switchMap", () => {
-  it("should handle basic switchMap with completed streams", async () => {
+  describe("Real Time", () => {
+    it("should handle basic switchMap with completed streams", async () => {
     const input = [1, 2, 3];
     
     const result = await toArray(pipe(
@@ -397,4 +401,581 @@ describe("switchMap", () => {
       // The 'c' and 'd' from first stream should be cancelled
       expect(results).to.deep.equal(['a', 'b', 'e', 'f', 'g']);
     });
+  });
+
+  describe("Virtual Time", () => {
+    describe("Basic SwitchMap Behavior", () => {
+      it("should switch to latest projected stream", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b-c|", { a: 1, b: 2, c: 3 });
+          
+          const result = pipe(
+            source,
+            switchMap((x: number) => cold("  x-y|", { x: x * 10, y: x * 10 + 1 }))
+          );
+          
+          // switchMap cancels previous projections when new values arrive
+          // a=1 at tick 0: projects to cold("  x-y|"), x=10 at tick 0
+          // b=2 at tick 2: cancels first projection, projects new cold("  x-y|"), x=20 at tick 2  
+          // c=3 at tick 4: cancels second projection, projects new cold("  x-y|"), x=30 at tick 4, y=31 at tick 6
+          expectStream(result).toBe("a-b-c-d|", { a: 10, b: 20, c: 30, d: 31 });
+        });
+      });
+
+      it("should emit all values from single projection", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a|", { a: 1 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x-y-z|", { x: x * 10, y: x * 10 + 1, z: x * 10 + 2 }))
+          );
+          
+          expectStream(result).toBe("x-y-z|", { x: 10, y: 11, z: 12 });
+        });
+      });
+
+      it("should cancel previous projection when switching", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a--b|", { a: 1, b: 2 });
+          
+          const result = pipe(
+            source,
+            switchMap((x: number) => cold("  x---y---z|", { x: x * 10, y: x * 10 + 1, z: x * 10 + 2 }))
+          );
+          
+          // First projection: a=1 at tick 0, x=10 at tick 0
+          // At tick 3: switch to second projection: b=2, x=20 at tick 3, y=21 at tick 7, z=22 at tick 11
+          expectStream(result).toBe("a--b---c---d|", { a: 10, b: 20, c: 21, d: 22 });
+        });
+      });
+
+      it("should handle immediate switch", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("(ab)|", { a: 1, b: 2 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x-y|", { x: x * 10, y: x * 10 + 1 }))
+          );
+          
+          // Both projections start at same time, but switch immediately to second
+          expectStream(result).toBe("x-y|", { x: 20, y: 21 });
+        });
+      });
+
+      it("should handle empty projections", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b|", { a: 1, b: 2 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  |"))
+          );
+          
+          expectStream(result).toBe("---|");
+        });
+      });
+
+      it("should handle never-ending projection", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a|", { a: 1 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x-y-", { x: x * 10, y: x * 10 + 1 })),
+            timeout(10)
+          );
+          
+          expectStream(result).toBe("x-y---------#", { x: 10, y: 11 }, Error("Stream timeout after 10ms"));
+        });
+      });
+    });
+
+    describe("Timing Patterns", () => {
+      it("should maintain projection timing", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a|", { a: 1 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x---y--z|", { x: x * 10, y: x * 10 + 1, z: x * 10 + 2 }))
+          );
+          
+          expectStream(result).toBe("x---y--z|", { x: 10, y: 11, z: 12 });
+        });
+      });
+
+      it("should handle late switching", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a---b|");
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("x-y-z|"))
+          );
+          
+          expectStream(result).toBe("x-y-x-y-z|");
+        });
+      });
+
+      it("should handle rapid switching", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b-c|");
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("x-y|"))
+          );
+          
+          // Each projection starts but gets cancelled by the next
+          expectStream(result).toBe("x-x-x-y|");
+        });
+      });
+
+      it("should handle grouped source emissions", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("(abc)|", { a: 1, b: 2, c: 3 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x-y|", { x: x * 10, y: x * 10 + 1 }))
+          );
+          
+          // All projections start simultaneously, but only last one continues
+          expectStream(result).toBe("x-y|", { x: 30, y: 31 });
+        });
+      });
+
+      it("should handle delayed source start", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("-----a|", { a: 1 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x-y|", { x: x * 10, y: x * 10 + 1 }))
+          );
+          
+          expectStream(result).toBe("-----x-y|", { x: 10, y: 11 });
+        });
+      });
+
+      it("should handle spaced projections", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a--b--c|");
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("x-y|"))
+          );
+          
+          expectStream(result).toBe("x-yx-yx-y|");
+        });
+      });
+    });
+
+    describe("Empty and Edge Cases", () => {
+      it("should handle empty source stream", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("|", {} as Record<string, number>);
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x|", { x: x * 10 }))
+          );
+          
+          expectStream(result).toBe("|");
+        });
+      });
+
+      it("should handle never source stream", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("-", {} as Record<string, number>);
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x|", { x: x * 10 })),
+            timeout(10)
+          );
+          
+          expectStream(result).toBe("----------#", {}, Error("Stream timeout after 10ms"));
+        });
+      });
+
+      it("should handle source with only empty projections", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b|");
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("|"))
+          );
+          
+          expectStream(result).toBe("---|");
+        });
+      });
+
+      it("should handle completion during projection", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a--|", { a: 1 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x-y-z-w|", { x: x * 10, y: x * 10 + 1, z: x * 10 + 2, w: x * 10 + 3 }))
+          );
+          
+          // Source completes at tick 3, but projection continues until it completes
+          expectStream(result).toBe("x-y-z-w|", { x: 10, y: 11, z: 12, w: 13 });
+        });
+      });
+
+      it("should handle never projection", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a|");
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("x-y-")),
+            timeout(10)
+          );
+          
+          expectStream(result).toBe("x-y---------#",undefined,  Error("Stream timeout after 10ms"));
+        });
+      });
+    });
+
+    describe("Error Handling", () => {
+      it("should propagate source stream errors", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const error = new Error("Source error");
+          const source = cold("a-#", { a: 1 }, error);
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x|", { x: x * 10 }))
+          );
+          
+          expectStream(result).toBe("x-#", { x: 10 }, error);
+        });
+      });
+
+      it("should propagate projection errors", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const error = new Error("Projection error");
+          const source = cold("a|", { a: 1 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x-#", { x: x * 10 }, error))
+          );
+          
+          expectStream(result).toBe("x-#", { x: 10 }, error);
+        });
+      });
+
+      it("should propagate errors from latest projection", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const error = new Error("Latest projection error");
+          const source = cold("a-b|");
+          
+          const result = pipe(
+            source,
+            switchMap(x => {
+              if (x === 'b') {
+                return cold("x-#", undefined,  error);
+              }
+              return cold("x-y|");
+            })
+          );
+          
+          expectStream(result).toBe("x-x-#", undefined, error);
+        });
+      });
+
+      it("should handle immediate source error", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const error = new Error("Immediate error");
+          const source = cold("#", {}, error);
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x|", { x: Number(x) * 10 }))
+          );
+          
+          expectStream(result).toBe("#", {}, error);
+        });
+      });
+
+      it("should handle immediate projection error", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const error = new Error("Immediate projection error");
+          const source = cold("a|", { a: 1 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  #", {}, error))
+          );
+          
+          expectStream(result).toBe("#", {}, error);
+        });
+      });
+
+      it("should handle error during switch", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const error = new Error("Switch error");
+          const source = cold("a-b|", { a: 1, b: 2 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => {
+              if (x === 2) {
+                return cold("  #", {}, error);
+              }
+              return cold("  x-y|", { x: x * 10, y: x * 10 + 1 });
+            })
+          );
+          
+          expectStream(result).toBe("x-#", { x: 10 }, error);
+        });
+      });
+
+      it("should handle error in projection function", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const error = new Error("Projection function error");
+          const source = cold("a-b|", { a: 1, b: 2 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => {
+              if (x === 2) {
+                throw error;
+              }
+              return cold("  x-y|", { x: x * 10, y: x * 10 + 1 });
+            })
+          );
+          
+          expectStream(result).toBe("x-#", { x: 10 }, error);
+        });
+      });
+
+      it("should handle error with grouped emissions", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const error = new Error("Grouped error");
+          const source = cold("a|", { a: 1 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  (xy)#", { x: x * 10, y: x * 10 + 1 }, error))
+          );
+          
+          expectStream(result).toBe("(xy)#", { x: 10, y: 11 }, error);
+        });
+      });
+    });
+
+    describe("Data Types", () => {
+      it("should work with string projections", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b|", { a: "hello", b: "world" });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("x-y|", { x: x.toUpperCase(), y: x.toLowerCase() }))
+          );
+          
+          expectStream(result).toBe("a-b-c|", { a: "HELLO", b: "WORLD", c: "world" });
+        });
+      });
+
+      it("should work with object projections", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b|", { 
+            a: { id: 1, name: "first" }, 
+            b: { id: 2, name: "second" } 
+          });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x|", { x: { ...x, processed: true } }))
+          );
+          
+          expectStream(result).toBe("a-b|", { 
+            a: { id: 1, name: "first", processed: true },
+            b: { id: 2, name: "second", processed: true }
+          });
+        });
+      });
+
+      it("should work with mixed type projections", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b-c|", { a: 1, b: "hello", c: true });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x|", { x: String(x) }))
+          );
+          
+          expectStream(result).toBe("a-b-c|", { a: "1", b: "hello", c: "true" });
+        });
+      });
+
+      it("should work with array projections", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b|", { a: [1, 2], b: [3, 4] });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x|", { x: x.concat([0]) }))
+          );
+          
+          expectStream(result).toBe("a-b|", { a: [1, 2, 0], b: [3, 4, 0] });
+        });
+      });
+
+      it("should work with null and undefined values", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b|", { a: null, b: undefined });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x|", { x: x === null ? "null" : "undefined" }))
+          );
+          
+          expectStream(result).toBe("a-b|", { a: "null", b: "undefined" });
+        });
+      });
+
+      it("should work with boolean projections", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b|", { a: true, b: false });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x-y|", { x: x, y: !x }))
+          );
+          
+          expectStream(result).toBe("a-b-c|", { a: true, b: false, c: true });
+        });
+      });
+    });
+
+    describe("Index Parameter", () => {
+      it("should pass correct index to projection function", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b-c|", { a: 10, b: 20, c: 30 });
+          
+          const result = pipe(
+            source,
+            switchMap((value, index) => cold("  x|", { x: value + index }))
+          );
+          
+          expectStream(result).toBe("a-b-c|", { a: 10, b: 21, c: 32 });
+        });
+      });
+
+      it("should increment index correctly", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a--b|", { a: 10, b: 20 });
+          
+          const result = pipe(
+            source,
+            switchMap((value, index) => cold("  x-y|", { x: value + index, y: (value + index) * 2 }))
+          );
+          
+          expectStream(result).toBe("a-bc-d|", { a: 10, b: 20, c: 21, d: 42 });
+        });
+      });
+
+      it("should handle index with immediate emissions", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("(abc)|", { a: 1, b: 2, c: 3 });
+          
+          const result = pipe(
+            source,
+            switchMap((value, index) => cold("  x|", { x: value * 10 + index }))
+          );
+          
+          expectStream(result).toBe("x|", { x: 32 }); // 3 * 10 + 2
+        });
+      });
+    });
+
+    describe("Subscription Timing", () => {
+      it("should handle late subscription", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("ab^c-d|", { a: 1, b: 2, c: 3, d: 4 });
+          
+          const result = pipe(
+            source,
+            switchMap((x: number) => cold("  x-y|", { x: x * 10, y: x * 10 + 1 }))
+          );
+          
+          expectStream(result).toBe("a-b-c|", { a: 30, b: 40, c: 41 });
+        });
+      });
+
+      it("should handle subscription during projection", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-^b-c|", { a: 1, b: 2, c: 3 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x-y|", { x: x * 10, y: x * 10 + 1 }))
+          );
+          
+          expectStream(result).toBe("a-b-c|", { a: 20, b: 30, c: 31 });
+        });
+      });
+
+      it("should handle subscription after source completion", async () => {
+        const scheduler = new VirtualTimeScheduler();
+        await scheduler.run(async ({ cold, expectStream }) => {
+          const source = cold("a-b|^", { a: 1, b: 2 });
+          
+          const result = pipe(
+            source,
+            switchMap(x => cold("  x|", { x: x * 10 }))
+          );
+          
+          expectStream(result).toBe("|");
+        });
+      });
+    });
+  });
 });

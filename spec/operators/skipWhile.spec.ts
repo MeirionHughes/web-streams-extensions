@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { from, pipe, toArray, skipWhile } from "../../src/index.js";
 
+
 describe("skipWhile", () => {
   it("should skip while predicate is true", async () => {
     const result = await toArray(pipe(

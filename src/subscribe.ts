@@ -42,7 +42,7 @@ export function subscribe<T>(
     unsubscribe() {   
       if (!isClosed && reader) {  
         try {
-          reader.cancel();
+          reader.cancel().catch(() => {}); // Handle async cancellation properly
           reader.releaseLock();
           // Only call complete if this is a normal unsubscribe, not due to error
           if(complete && !isErroring) complete();

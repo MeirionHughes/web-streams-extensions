@@ -18,7 +18,7 @@ export function timeout<T>(duration: number): (src: ReadableStream<T>, opts?: { 
   if (duration <= 0) {
     throw new Error("Timeout duration must be positive");
   }
-  
+
   return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -36,15 +36,15 @@ export function timeout<T>(duration: number): (src: ReadableStream<T>, opts?: { 
         while (controller.desiredSize > 0 && reader != null && !cancelled) {
           let next = await reader.read();
           clearTimer();
-          
-          if (next.done) {            
+
+          if (next.done) {
             controller.close();
             reader.releaseLock();
             reader = null;
             return;
           } else {
             controller.enqueue(next.value);
-            
+
             // Set up timeout for next read
             timer = setTimeout(() => {
               timer = null;
@@ -52,7 +52,7 @@ export function timeout<T>(duration: number): (src: ReadableStream<T>, opts?: { 
                 controller.error(new Error(`Stream timeout after ${duration}ms`));
                 if (reader) {
                   try {
-                    reader.cancel("timeout");
+                    reader.cancel("timeout").catch(() => {}); // Handle promise properly
                     reader.releaseLock();
                   } catch (err) {
                     // Ignore cleanup errors
@@ -68,7 +68,7 @@ export function timeout<T>(duration: number): (src: ReadableStream<T>, opts?: { 
         controller.error(err);
         if (reader) {
           try {
-            reader.cancel(err);
+            await reader.cancel(err);
             reader.releaseLock();
           } catch (e) {
             // Ignore cleanup errors
@@ -81,17 +81,34 @@ export function timeout<T>(duration: number): (src: ReadableStream<T>, opts?: { 
     return new ReadableStream<T>({
       start(controller) {
         reader = src.getReader();
+        // Set up timeout for initial
+        timer = setTimeout(() => {
+          timer = null;
+          if (!cancelled) {
+            controller.error(new Error(`Stream timeout after ${duration}ms`));
+            if (reader) {
+              try {
+                reader.cancel("timeout").catch(() => {}); // Handle promise properly
+                reader.releaseLock();
+              } catch (err) {
+                // Ignore cleanup errors
+              }
+              reader = null;
+            }
+          }
+        }, duration);
+
         return pull(controller);
       },
       pull(controller) {
         return pull(controller);
       },
-      cancel(reason?: any) {
+      async cancel(reason?: any) {
         cancelled = true;
         clearTimer();
         if (reader) {
           try {
-            reader.cancel(reason);
+            await reader.cancel(reason);
             reader.releaseLock();
           } catch (err) {
             // Ignore cleanup errors

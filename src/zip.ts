@@ -152,14 +152,14 @@ function zipSources(sources: ReadableStream<any>[]): ReadableStream<any[]> {
         controller.error(error);
         // Cleanup on error
         if (readers) {
-          readers.forEach(reader => {
+          await Promise.all(readers.map(async reader => {
             try {
-              reader.cancel(error);
+              await reader.cancel(error);
               reader.releaseLock();
             } catch (e) {
               // Ignore cleanup errors
             }
-          });
+          }));
           readers = null;
         }
       }

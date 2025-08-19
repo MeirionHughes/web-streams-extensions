@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { toArray, from, pipe, toPromise, Subject } from '../src/index.js';
 
+
 describe("from", () => {
   it("can create stream from array", async () => {
     let inputA = [1, 2, 3, 4];

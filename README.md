@@ -3,13 +3,13 @@
 [![npm version](https://img.shields.io/npm/v/web-streams-extensions.svg)](https://www.npmjs.com/package/web-streams-extensions)
 [![npm beta](https://img.shields.io/npm/v/web-streams-extensions/beta.svg?label=npm%20beta)](https://www.npmjs.com/package/web-streams-extensions)
 [![Build Status](https://github.com/MeirionHughes/web-streams-extensions/workflows/Test%20and%20Coverage/badge.svg)](https://github.com/MeirionHughes/web-streams-extensions/actions)
-[![codecov](https://codecov.io/gh/MeirionHughes/web-streams-extensions/branch/master/graph/badge.svg)](https://codecov.io/gh/MeirionHughes/web-streams-extensions)
+[![Coverage](https://img.shields.io/endpoint?url=https://meirionhughes.github.io/web-streams-extensions/coverage.json)](https://meirionhughes.github.io/web-streams-extensions/coverage/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
-A collection of helper methods for WebStreams, inspired by ReactiveExtensions. 
-Being built on-top of ReadableStream, we can have a reactive pipeline with **non-blocking back-pressure built-in**. 
+A collection of predominantly Object-Mode helper methods for WebStreams, inspired by ReactiveExtensions. 
+Being built on-top of ReadableStream, we can have a reactive pipeline with **non-blocking back-pressure** built-in. 
 
 ## Contributing
 
@@ -37,60 +37,6 @@ const stream = pipe(
 
 const result = await toArray(stream);
 console.log(result); // [4, 8, 12]
-```
-
-### Real-World Example: Search with Debouncing
-
-```typescript
-import { from, pipe, debounceTime, switchMap, map } from 'web-streams-extensions';
-
-// Simulate user typing in a search box
-const userKeystrokes = from(['h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd']);
-
-const searchResults = pipe(
-  userKeystrokes,
-  debounceTime(300),                         // Wait 300ms after user stops typing
-  map(chars => chars.join('')),              // Join characters into search term
-  filter(term => term.length > 2),           // Only search for terms longer than 2 chars
-  switchMap((term, index, signal) =>         // Cancel previous search when new term arrives
-    fetch(`/api/search?q=${term}`, { signal }) // Pass AbortSignal to fetch for cancellation
-      .then(response => response.json())
-      .then(data => from(data.results))
-  )
-);
-
-// Subscribe to search results
-subscribe(searchResults, 
-  result => console.log('Search result:', result),
-  () => console.log('Search completed'),
-  error => console.error('Search error:', error)
-);
-```
-
-### Reactive Data Processing Pipeline
-
-```typescript
-import { interval, pipe, map, filter, buffer, scan } from 'web-streams-extensions';
-
-// Simulate sensor data every 100ms
-const sensorStream = pipe(
-  interval(100),
-  map(() => ({ 
-    temperature: 20 + Math.random() * 10, 
-    timestamp: Date.now() 
-  })),
-  filter(reading => reading.temperature > 25),  // Filter hot readings
-  buffer(5),                                    // Group into batches of 5
-  map(batch => ({                               // Calculate batch statistics
-    avgTemp: batch.reduce((sum, r) => sum + r.temperature, 0) / batch.length,
-    count: batch.length,
-    timespan: batch[batch.length - 1].timestamp - batch[0].timestamp
-  })),
-  scan((total, batch) => total + batch.count, 0) // Keep running total
-);
-
-const results = await toArray(pipe(sensorStream, take(3)));
-console.log('Hot readings processed:', results);
 ```
 
 ## API Reference Quick Index
@@ -1908,9 +1854,12 @@ The library implements proper backpressure handling throughout the pipeline, aut
 ### How Backpressure Works
 
 Backpressure is achieved by:
-1. **Controller.desiredSize**: Operators check this to know when to pause production
-2. **Pull-based reading**: Operators wait for 'pull' calls before producing more values
+1. **`controller.desiredSize`**: Operators check this to know when to pause production
+2. **Pull-based reading**: Most operators wait for 'pull' calls before producing more values
 3. **Buffer limits**: Configurable `highWaterMark` controls internal buffering
+
+⚠️ ReadableStreams are non-blocking: if a producer does NOT adhere to `controller.desiredSize` and keeps enqueue'ing values it can cause unbounded growth of internal buffers. 
+
 
 ### Automatic Backpressure Example
 

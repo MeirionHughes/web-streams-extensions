@@ -1,5 +1,6 @@
 /**
- * Creates a ReadableStream that emits incremental numbers at specified intervals.
+ * Creates a ReadableStream that emits incremental numbers at specified intervals. 
+ * Does not emit immediately.
  * 
  * @param duration Interval duration in milliseconds
  * @returns A ReadableStream that emits numbers (0, 1, 2, ...) at regular intervals
@@ -14,32 +15,35 @@
  * ```
  */
 export function interval(duration: number): ReadableStream<number> {
-    if (duration <= 0) {
-        throw new Error("Interval duration must be positive");
-    }
-    
-    let count = 0;
-    let timer: ReturnType<typeof setInterval> | null = null;
+  if (duration <= 0) {
+    throw new Error("Interval duration must be positive");
+  }
 
-    return new ReadableStream<number>({
-        async start(controller) {
-            timer = setInterval(() => {
-                try {
-                    controller.enqueue(count++);
-                } catch (err) {
-                    // Controller might be closed, clear timer
-                    if (timer) {
-                        clearInterval(timer);
-                        timer = null;
-                    }
-                }
-            }, duration);
-        },
-        async cancel() {
+  let count = 0;
+  let timer: ReturnType<typeof setInterval> | null = null;
+
+  return new ReadableStream<number>({
+    async start(controller) {
+      timer = setInterval(() => {
+        // might have been cancelled but still our cb called (edge-case)
+        if (timer) {
+          try {
+            controller.enqueue(count++);
+          } catch (err) {
+            // Controller might be closed, clear timer
             if (timer) {
-                clearInterval(timer);
-                timer = null;
+              clearInterval(timer);
+              timer = null;
             }
+          }
         }
-    });
+      }, duration);
+    },
+    async cancel() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    }
+  });
 }

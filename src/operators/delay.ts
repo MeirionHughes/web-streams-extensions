@@ -1,5 +1,7 @@
+import { sleep } from "../utils/sleep.js";
+
 /**
- * Delays the emission of values by a specified amount of time.
+ * Delays the the src read events by a specified amount of time.
  * Each value is delayed by the same duration.
  * 
  * @param duration The delay in milliseconds
@@ -21,7 +23,7 @@
  * ```
  */
 export function delay<T>(duration: number): (
-  src: ReadableStream<T>, 
+  src: ReadableStream<T>,
   opts?: { highWaterMark?: number }
 ) => ReadableStream<T> {
   if (duration < 0) {
@@ -30,38 +32,19 @@ export function delay<T>(duration: number): (
 
   return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
     let reader: ReadableStreamDefaultReader<T> = null;
-    let pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
 
     async function flush(controller: ReadableStreamDefaultController<T>) {
       try {
         while (controller.desiredSize > 0 && reader != null) {
           let { done, value } = await reader.read();
-          
+
+          await sleep(duration);
+
           if (done) {
-            // Wait for all pending timeouts to complete before closing
-            if (pendingTimeouts.size === 0) {
-              controller.close();
-            }
+            controller.close();
             return;
           }
-
-          // Schedule delayed emission
-          const timeoutId = setTimeout(() => {
-            try {
-              pendingTimeouts.delete(timeoutId);
-              controller.enqueue(value);
-              
-              // If reader is null (stream ended) and no more pending timeouts, close
-              if (!reader && pendingTimeouts.size === 0) {
-                controller.close();
-              }
-            } catch (err) {
-              // Controller might be closed, just clean up
-              pendingTimeouts.delete(timeoutId);
-            }
-          }, duration);
-          
-          pendingTimeouts.add(timeoutId);
+          controller.enqueue(value);
         }
       } catch (err) {
         controller.error(err);
@@ -81,12 +64,6 @@ export function delay<T>(duration: number): (
           reader.releaseLock();
           reader = null;
         }
-        
-        // Clear all pending timeouts
-        for (const timeoutId of pendingTimeouts) {
-          clearTimeout(timeoutId);
-        }
-        pendingTimeouts.clear();
       }
     }, { highWaterMark });
   };

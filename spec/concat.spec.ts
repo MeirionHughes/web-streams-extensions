@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { toArray, concat, filter, from, zip, buffer } from '../src/index.js';
 
+
 describe("steams", () => {
   it("can concat streams", async () => {
     let inputA = [1, 2, 3, 4];
@@ -149,6 +150,10 @@ describe("steams", () => {
       await reader.cancel("test");
     } catch (err) {
       // The cancel error should be handled internally
+      expect(err).to.be.instanceOf(Error);
     }
+    
+    // Wait a moment for any background cleanup to complete
+    await new Promise(resolve => setTimeout(resolve, 10));
   })
 })

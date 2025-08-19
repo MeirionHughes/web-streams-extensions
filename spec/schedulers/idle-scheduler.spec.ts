@@ -1,3 +1,4 @@
+
 import { expect } from 'chai';
 import { IdleScheduler } from '../../src/schedulers/idle-scheduler.js';
 import { sleep } from '../../src/utils/sleep.js';
@@ -14,49 +15,56 @@ describe('IdleScheduler', () => {
     expect(scheduler.schedule).to.be.a('function');
   });
 
-  it('should execute callback with schedule', (done) => {
+  it('should execute callback with schedule', async () => {
     let executed = false;
-    scheduler.schedule(() => {
-      executed = true;
-      expect(executed).to.be.true;
-      done();
-    });
     // Should not execute immediately
     expect(executed).to.be.false;
+    
+    await new Promise<void>((resolve) => {
+      scheduler.schedule(() => {
+        executed = true;
+        expect(executed).to.be.true;
+        resolve();
+      });
+    });
   });
 
-  it('should work with multiple consecutive schedule calls', (done) => {
+  it('should work with multiple consecutive schedule calls', async () => {
     const results: number[] = [];
     let completed = 0;
     
-    const checkComplete = () => {
-      completed++;
-      if (completed === 3) {
-        expect(results).to.have.lengthOf(3);
-        expect(results).to.include.members([1, 2, 3]);
-        done();
-      }
-    };
-    
-    scheduler.schedule(() => { results.push(1); checkComplete(); });
-    scheduler.schedule(() => { results.push(2); checkComplete(); });
-    scheduler.schedule(() => { results.push(3); checkComplete(); });
+    await new Promise<void>((resolve) => {
+      const checkComplete = () => {
+        completed++;
+        if (completed === 3) {
+          expect(results).to.have.lengthOf(3);
+          expect(results).to.include.members([1, 2, 3]);
+          resolve();
+        }
+      };
+      
+      scheduler.schedule(() => { results.push(1); checkComplete(); });
+      scheduler.schedule(() => { results.push(2); checkComplete(); });
+      scheduler.schedule(() => { results.push(3); checkComplete(); });
+    });
   });
 
-  it('should handle concurrent schedule calls', (done) => {
+  it('should handle concurrent schedule calls', async () => {
     let completed = 0;
     const total = 5;
     
-    const checkComplete = () => {
-      completed++;
-      if (completed === total) {
-        done();
+    await new Promise<void>((resolve) => {
+      const checkComplete = () => {
+        completed++;
+        if (completed === total) {
+          resolve();
+        }
+      };
+      
+      for (let i = 0; i < total; i++) {
+        scheduler.schedule(checkComplete);
       }
-    };
-    
-    for (let i = 0; i < total; i++) {
-      scheduler.schedule(checkComplete);
-    }
+    });
   });
 
   describe('environment-specific behavior', () => {
@@ -73,7 +81,7 @@ describe('IdleScheduler', () => {
       (globalThis as any).setImmediate = originalSetImmediate;
     });
 
-    it('should use requestIdleCallback when available', (done) => {
+    it('should use requestIdleCallback when available', async () => {
       let idleCallbackCalled = false;
       const originalRequestIdleCallback = globalThis.requestIdleCallback;
       
@@ -86,14 +94,16 @@ describe('IdleScheduler', () => {
       // Create scheduler after setting up the mock
       const scheduler = new IdleScheduler();
 
-      scheduler.schedule(() => {
-        expect(idleCallbackCalled).to.be.true;
-        globalThis.requestIdleCallback = originalRequestIdleCallback;
-        done();
+      await new Promise<void>((resolve) => {
+        scheduler.schedule(() => {
+          expect(idleCallbackCalled).to.be.true;
+          globalThis.requestIdleCallback = originalRequestIdleCallback;
+          resolve();
+        });
       });
     });
 
-    it('should fall back to setImmediate when requestIdleCallback is not available', (done) => {
+    it('should fall back to setImmediate when requestIdleCallback is not available', async () => {
       const originalRequestIdleCallback = globalThis.requestIdleCallback;
       const originalSetImmediate = (globalThis as any).setImmediate;
       
@@ -108,15 +118,17 @@ describe('IdleScheduler', () => {
       // Create scheduler after setting up the environment
       const scheduler = new IdleScheduler();
 
-      scheduler.schedule(() => {
-        expect(setImmediateCalled).to.be.true;
-        globalThis.requestIdleCallback = originalRequestIdleCallback;
-        (globalThis as any).setImmediate = originalSetImmediate;
-        done();
+      await new Promise<void>((resolve) => {
+        scheduler.schedule(() => {
+          expect(setImmediateCalled).to.be.true;
+          globalThis.requestIdleCallback = originalRequestIdleCallback;
+          (globalThis as any).setImmediate = originalSetImmediate;
+          resolve();
+        });
       });
     });
 
-    it('should fall back to setTimeout when neither requestIdleCallback nor setImmediate are available', (done) => {
+    it('should fall back to setTimeout when neither requestIdleCallback nor setImmediate are available', async () => {
       const originalRequestIdleCallback = globalThis.requestIdleCallback;
       const originalSetImmediate = (globalThis as any).setImmediate;
       const originalSetTimeout = globalThis.setTimeout;
@@ -134,16 +146,18 @@ describe('IdleScheduler', () => {
       // Create scheduler after setting up the environment
       const scheduler = new IdleScheduler();
 
-      scheduler.schedule(() => {
-        expect(setTimeoutCalled).to.be.true;
-        globalThis.requestIdleCallback = originalRequestIdleCallback;
-        (globalThis as any).setImmediate = originalSetImmediate;
-        globalThis.setTimeout = originalSetTimeout;
-        done();
+      await new Promise<void>((resolve) => {
+        scheduler.schedule(() => {
+          expect(setTimeoutCalled).to.be.true;
+          globalThis.requestIdleCallback = originalRequestIdleCallback;
+          (globalThis as any).setImmediate = originalSetImmediate;
+          globalThis.setTimeout = originalSetTimeout;
+          resolve();
+        });
       });
     });
 
-    it('should handle requestIdleCallback as non-function', (done) => {
+    it('should handle requestIdleCallback as non-function', async () => {
       const originalRequestIdleCallback = globalThis.requestIdleCallback;
       const originalSetImmediate = (globalThis as any).setImmediate;
       
@@ -158,15 +172,17 @@ describe('IdleScheduler', () => {
       // Create scheduler after setting up the environment
       const scheduler = new IdleScheduler();
 
-      scheduler.schedule(() => {
-        expect(setImmediateCalled).to.be.true;
-        globalThis.requestIdleCallback = originalRequestIdleCallback;
-        (globalThis as any).setImmediate = originalSetImmediate;
-        done();
+      await new Promise<void>((resolve) => {
+        scheduler.schedule(() => {
+          expect(setImmediateCalled).to.be.true;
+          globalThis.requestIdleCallback = originalRequestIdleCallback;
+          (globalThis as any).setImmediate = originalSetImmediate;
+          resolve();
+        });
       });
     });
 
-    it('should handle missing globalThis', (done) => {
+    it('should handle missing globalThis', async () => {
       const originalGlobalThis = globalThis;
       
       try {
@@ -182,8 +198,10 @@ describe('IdleScheduler', () => {
         const scheduler = new IdleScheduler();
         
         // Should fall back to setTimeout without throwing
-        scheduler.schedule(() => {
-          done();
+        await new Promise<void>((resolve) => {
+          scheduler.schedule(() => {
+            resolve();
+          });
         });
       } finally {
         if (typeof window !== 'undefined') {

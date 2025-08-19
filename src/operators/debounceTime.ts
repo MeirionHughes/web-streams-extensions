@@ -94,7 +94,7 @@ export function debounceTime<T>(duration: number): (src: ReadableStream<T>, opts
         controller.error(err);
         if (reader) {
           try {
-            reader.cancel(err);
+            await reader.cancel(err);
             reader.releaseLock();
           } catch (e) {
             // Ignore cleanup errors
@@ -117,7 +117,9 @@ export function debounceTime<T>(duration: number): (src: ReadableStream<T>, opts
         clearTimer();
         if (reader) {
           try {
-            reader.cancel(reason);
+            reader.cancel(reason).catch(() => {
+              // Ignore cancel errors
+            });
             reader.releaseLock();
           } catch (err) {
             // Ignore cleanup errors

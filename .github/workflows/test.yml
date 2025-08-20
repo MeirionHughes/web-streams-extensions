@@ -155,7 +155,38 @@ jobs:
       run: npm run test:cover
 
     - name: Generate coverage badge data
-      run: bash scripts/test-ci-badge.sh
+      run: |
+        # Generate coverage badge and details JSON files using Node.js
+        node -e "
+        const fs = require('fs');
+        const coverage = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
+        const statements = Math.round(coverage.total.statements.pct);
+        const lines = Math.round(coverage.total.lines.pct);
+        const functions = Math.round(coverage.total.functions.pct);
+        const branches = Math.round(coverage.total.branches.pct);
+        
+        // Create shields.io compatible JSON
+        const badge = {
+          schemaVersion: 1,
+          label: 'coverage',
+          message: statements + '%',
+          color: statements >= 90 ? 'brightgreen' : statements >= 80 ? 'green' : statements >= 70 ? 'yellow' : 'red'
+        };
+        fs.writeFileSync('coverage/coverage-badge.json', JSON.stringify(badge, null, 2));
+        
+        // Create detailed coverage JSON
+        const details = {
+          statements,
+          lines,
+          functions,
+          branches,
+          overall: statements
+        };
+        fs.writeFileSync('coverage/coverage-details.json', JSON.stringify(details, null, 2));
+        
+        console.log('Coverage badge generated:', badge);
+        console.log('Coverage details generated:', details);
+        "
 
     - name: Prepare GitHub Pages content
       run: |
@@ -164,6 +195,11 @@ jobs:
         
         # Copy the lcov-report content to the root of pages-content
         cp -r coverage/lcov-report/* pages-content/
+        
+        # Copy badge and summary files to root level for direct access
+        cp coverage/coverage-badge.json pages-content/
+        cp coverage/coverage-summary.json pages-content/
+        cp coverage/coverage-details.json pages-content/
         
         # Also make raw coverage files available in a subdirectory
         mkdir -p pages-content/raw

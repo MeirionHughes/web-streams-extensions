@@ -3,13 +3,13 @@
 [![npm version](https://img.shields.io/npm/v/web-streams-extensions.svg)](https://www.npmjs.com/package/web-streams-extensions)
 [![npm beta](https://img.shields.io/npm/v/web-streams-extensions/beta.svg?label=npm%20beta)](https://www.npmjs.com/package/web-streams-extensions)
 [![Build Status](https://github.com/MeirionHughes/web-streams-extensions/workflows/Test%20and%20Coverage/badge.svg)](https://github.com/MeirionHughes/web-streams-extensions/actions)
-[![Coverage](https://img.shields.io/endpoint?url=https://meirionhughes.github.io/web-streams-extensions/coverage.json)](https://meirionhughes.github.io/web-streams-extensions/coverage/)
+[![codecov](https://codecov.io/gh/MeirionHughes/web-streams-extensions/branch/master/graph/badge.svg)](https://codecov.io/gh/MeirionHughes/web-streams-extensions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
+[![ES2022](https://img.shields.io/badge/ECMAScript-ES2022-blueviolet.svg)](https://tc39.es/ecma262/)
 
-A collection of predominantly Object-Mode helper methods for WebStreams, inspired by ReactiveExtensions. 
-Being built on-top of ReadableStream, we can have a reactive pipeline with **non-blocking back-pressure** built-in. 
+A collection helper methods for WebStreams, inspired by ReactiveExtensions. 
 
 ## Contributing
 
@@ -38,6 +38,42 @@ const stream = pipe(
 const result = await toArray(stream);
 console.log(result); // [4, 8, 12]
 ```
+
+### Native Web Streams API
+
+A few notes on using the native Web Streams primitives alongside this library:
+
+- piping: The standard `.pipeTo()` and `.pipeThrough()` are available on `ReadableStream`. Use `pipe()` from this library when you want to compose operators in a functional style (it returns a `ReadableStream`).
+
+- Async iteration: Readable streams are async-iterable. You can iterate values with `for await (const chunk of stream)` to consume values one-by-one.
+
+Examples:
+
+```ts
+// Using native async iteration
+for await (const v of of('a', 'b', 'c')) {
+  console.log(v);
+}
+
+// Use pipeTo when piping to a writable stream (native API)
+await from(['a', 'b', 'c'])
+  .pipeTo(new WritableStream({
+    write(chunk) { /* ... */ }
+  }));
+
+// Use pipeThrough if you want to use a native transform
+
+of(1,2,3)
+  .pipeThrough(new TransformStream({
+    transform(value, controller){
+      controller.enqueue(value);
+    }
+  }))
+  .pipeTo(writable);
+
+```
+
+⚠️ReadableStreams are not recoverable. If you start and consume a stream, that instance cannot be reused.  
 
 ## API Reference Quick Index
 
@@ -124,6 +160,8 @@ console.log(result); // [4, 8, 12]
 - `Subject<T>` - Multicast stream (hot observable)
 - `BehaviourSubject<T>` - Subject that remembers last value
 - `ReplaySubject<T>` - Subject that replays buffered values to new subscribers
+
+## Native Stream API
 
 
 

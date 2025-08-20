@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ master, develop ]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -33,22 +36,12 @@ jobs:
         npm list mocha c8 @types/mocha --depth=0
 
     - name: Run Node.js tests
-      run: npm test
-
-    - name: Run tests with coverage
-      if: matrix.node-version == '22.x'
-      run: npm run test:cover
-
-    - name: Upload coverage artifacts
-      if: matrix.node-version == '22.x'
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: coverage/lcov-report/
+      run: npm run test:node
 
   browser-test-chromium:
     runs-on: ubuntu-latest
     name: Browser Tests (Chromium)
+    needs: test
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -74,6 +67,7 @@ jobs:
   browser-test-firefox:
     runs-on: ubuntu-latest
     name: Browser Tests (Firefox)
+    needs: test
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -99,6 +93,7 @@ jobs:
   browser-test-webkit:
     runs-on: ubuntu-latest
     name: Browser Tests (WebKit)
+    needs: test
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -121,17 +116,10 @@ jobs:
     - name: Run WebKit browser tests
       run: npm run test:browser:webkit
 
-  coverage-summary:
+  coverage:
     runs-on: ubuntu-latest
+    name: Coverage
     needs: [test, browser-test-chromium, browser-test-firefox, browser-test-webkit]
-    if: |
-      github.ref == 'refs/heads/master' && 
-      github.event_name == 'push' && 
-      needs.test.result == 'success' &&
-      needs.browser-test-chromium.result == 'success' &&
-      needs.browser-test-firefox.result == 'success' &&
-      needs.browser-test-webkit.result == 'success'
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -146,24 +134,13 @@ jobs:
       run: npm ci
 
     - name: Run tests with coverage
-      run: npm run test:cover
+      run: npm test
 
-    - name: Upload coverage artifacts
-      uses: actions/upload-artifact@v4
+    - name: Upload coverage to Codecov
+      if: github.event_name == 'push'
+      uses: codecov/codecov-action@v4
       with:
-        name: coverage-report-final
-        path: coverage/lcov-report/
-
-    - name: Coverage badge data
-      run: |
-        COVERAGE_PERCENT=$(grep -oP 'lines\.*:\s*\K[\d.]+' coverage/lcov.info | tail -1)
-        echo "Coverage: ${COVERAGE_PERCENT}%"
-        echo "COVERAGE_PERCENT=${COVERAGE_PERCENT}" >> $GITHUB_ENV
-
-    - name: Deploy coverage to GitHub Pages
-      if: github.ref == 'refs/heads/master'
-      uses: peaceiris/actions-gh-pages@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./coverage/lcov-report
-        destination_dir: coverage
+        file: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false

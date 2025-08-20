@@ -124,6 +124,34 @@ export class VirtualReadableStream<T = any> implements ReadableStream<T> {
     return Promise.resolve();
   }
 
+  values(options?: ReadableStreamIteratorOptions): ReadableStreamAsyncIterator<T> {
+    // Simple implementation that creates an async iterator using getReader()
+    const reader = this.getReader();
+    return {
+      async next(): Promise<IteratorResult<T>> {
+        const result = await reader.read();
+        if (result.done) {
+          reader.releaseLock();
+          return { done: true, value: undefined } as any;
+        }
+        return { done: false, value: result.value };
+      },
+      async return(): Promise<IteratorResult<T>> {
+        try {
+          await reader.cancel();
+        } catch (e) { /* ignore */ }
+        return { done: true, value: undefined } as any;
+      },
+      [Symbol.asyncIterator]() {
+        return this;
+      }
+    } as ReadableStreamAsyncIterator<T>;
+  }
+
+  [Symbol.asyncIterator](): ReadableStreamAsyncIterator<T> {
+    return this.values();
+  }
+
   pipeThrough<U>(
     transform: { writable: WritableStream<T>; readable: ReadableStream<U> },
     options?: StreamPipeOptions
@@ -524,7 +552,7 @@ export function createVirtualStreamClasses(scheduler: VirtualTimeScheduler) {
       constructor(underlyingSource?: UnderlyingSource, strategy?: QueuingStrategy) {
         super(underlyingSource, strategy, scheduler);
       }
-    }
+    } as unknown as ReadableStream
   };
 }
 

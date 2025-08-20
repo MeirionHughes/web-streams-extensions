@@ -1,14 +1,15 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
+    "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "sourceMap": true,
     "inlineSources": true, 
 
     "lib": [
-      "ESNext",
-      "DOM"
+      "ES2022",
+      "DOM",
+      "DOM.AsyncIterable"
     ]
   },
   "exclude": ["node_modules"]

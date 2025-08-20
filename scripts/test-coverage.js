@@ -152,14 +152,18 @@ async function main() {
     console.log('Creating coverage directory...');
     mkdirSync(join(projectRoot, 'coverage'), { recursive: true });
 
-    // Run tests with coverage using glob pattern
+    // Run tests with c8 coverage
     console.log('Running tests with coverage...');
-    await runCommand('node', [
+    await runCommand('npx', [
+      'c8',
+      '--reporter=lcov',
+      '--reporter=text',
+      '--reports-dir=./coverage',
+      '--exclude=spec/**',
+      '--exclude=**/*.spec.ts',
+      'node',
       '--import', 'tsx/esm',
-      '--import', './test-setup.js',
-      '--experimental-test-coverage',
-      '--test-reporter=lcov',
-      '--test-reporter-destination=./coverage/lcov.info',
+      '--import', './scripts/test-setup.js',
       '--test',
       './spec/**/*.spec.ts'
     ]);

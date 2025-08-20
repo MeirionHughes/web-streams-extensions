@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdirSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -52,6 +52,50 @@ function runCommand(command, args = [], options = {}) {
   });
 }
 
+/**
+ * Generate coverage summary JSON from LCOV data
+ */
+function generateCoverageSummary(stdout) {
+  const lines = stdout.split('\n');
+  let totalStatements = 0;
+  let totalLines = 0;
+  let totalFunctions = 0;
+  let totalBranches = 0;
+  let coveredStatements = 0;
+  let coveredLines = 0;
+  let coveredFunctions = 0;
+  let coveredBranches = 0;
+
+  // Parse the lcov-summary output
+  for (const line of lines) {
+    if (line.includes('Total Coverage:')) {
+      const match = line.match(/(\d+\.?\d*)%/);
+      if (match) {
+        const percentage = parseFloat(match[1]);
+        // Use the overall percentage for all metrics
+        return {
+          total: {
+            statements: { pct: percentage },
+            lines: { pct: percentage },
+            functions: { pct: percentage },
+            branches: { pct: percentage }
+          }
+        };
+      }
+    }
+  }
+
+  // Fallback to 0 if parsing fails
+  return {
+    total: {
+      statements: { pct: 0 },
+      lines: { pct: 0 },
+      functions: { pct: 0 },
+      branches: { pct: 0 }
+    }
+  };
+}
+
 async function main() {
   try {
     // Create coverage directory
@@ -72,13 +116,49 @@ async function main() {
 
     // Generate coverage summary
     console.log('Generating coverage summary...');
-    await runCommand('npx', ['lcov-summary', './coverage/lcov.info']);
+    const { stdout } = await runCommand('npx', ['lcov-summary', './coverage/lcov.info']);
 
-    // Generate HTML coverage report
+    // Generate coverage-summary.json for CI use
+    const coverageSummary = generateCoverageSummary(stdout);
+    const coverageSummaryPath = join(projectRoot, 'coverage', 'coverage-summary.json');
+    writeFileSync(coverageSummaryPath, JSON.stringify(coverageSummary, null, 2));
+    console.log('✅ Generated coverage-summary.json');
+
+    // Generate basic HTML report using genhtml if available, otherwise just create a simple index
     console.log('Generating HTML coverage report...');
-    await runCommand('npx', ['lcov-viewer', 'lcov', './coverage/lcov.info', '-o', './coverage/lcov-report']);
+    try {
+      await runCommand('npx', ['genhtml', './coverage/lcov.info', '-o', './coverage/lcov-report']);
+      console.log('✅ Generated HTML coverage report using genhtml');
+    } catch (error) {
+      console.log('⚠️ genhtml not available, creating simple HTML report...');
+      
+      // Create a simple HTML coverage report
+      const htmlReportDir = join(projectRoot, 'coverage', 'lcov-report');
+      mkdirSync(htmlReportDir, { recursive: true });
+      
+      const percentage = coverageSummary.total.statements.pct;
+      const simpleHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Coverage Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .coverage { font-size: 24px; color: ${percentage > 80 ? 'green' : percentage > 60 ? 'orange' : 'red'}; }
+    </style>
+</head>
+<body>
+    <h1>Coverage Report</h1>
+    <div class="coverage">Total Coverage: ${percentage.toFixed(2)}%</div>
+    <p>Generated on ${new Date().toISOString()}</p>
+</body>
+</html>`;
+      
+      writeFileSync(join(htmlReportDir, 'index.html'), simpleHtml);
+      console.log('✅ Generated simple HTML coverage report');
+    }
 
-    console.log('✅ Coverage report generated in coverage/lcov-report/');
+    console.log('✅ Coverage report generated in coverage/');
     
   } catch (error) {
     console.error('❌ Coverage generation failed:', error.message);

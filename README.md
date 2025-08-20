@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/web-streams-extensions.svg)](https://www.npmjs.com/package/web-streams-extensions)
 [![npm beta](https://img.shields.io/npm/v/web-streams-extensions/beta.svg?label=npm%20beta)](https://www.npmjs.com/package/web-streams-extensions)
 [![Build Status](https://github.com/MeirionHughes/web-streams-extensions/workflows/Test%20and%20Coverage/badge.svg)](https://github.com/MeirionHughes/web-streams-extensions/actions)
-[![Coverage](https://img.shields.io/endpoint?url=https://meirionhughes.github.io/web-streams-extensions/coverage.json)](https://meirionhughes.github.io/web-streams-extensions/coverage/)
+[![Coverage](https://img.shields.io/endpoint?url=https://meirionhughes.github.io/web-streams-extensions/coverage-badge.json)](https://meirionhughes.github.io/web-streams-extensions/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)

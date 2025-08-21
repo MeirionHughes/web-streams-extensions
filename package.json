@@ -1,6 +1,6 @@
 {
   "name": "web-streams-extensions",
-  "version": "1.0.0-beta.4",
+  "version": "1.0.0",
   "description": "A comprehensive collection of helper methods for WebStreams with built-in backpressure support, inspired by ReactiveExtensions",
   "type": "module",
   "types": "./dist/esm/index.d.ts",

@@ -6,11 +6,8 @@ on:
   pull_request:
     branches: [ master, develop ]
 
-# Allow GitHub Pages deployment
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
   test:
@@ -39,18 +36,20 @@ jobs:
         npm list mocha c8 @types/mocha --depth=0
 
     - name: Run Node.js tests
-      run: npm test
+      run: npm run test:node
 
     - name: Run tests with coverage
       if: matrix.node-version == '22.x'
-      run: npm run test:cover
+      run: npm test
 
-    - name: Upload coverage artifacts
+    - name: Upload coverage to Codecov
       if: matrix.node-version == '22.x'
-      uses: actions/upload-artifact@v4
+      uses: codecov/codecov-action@v4
       with:
-        name: coverage-report
-        path: coverage/lcov-report/
+        file: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
 
   browser-test-chromium:
     runs-on: ubuntu-latest
@@ -126,105 +125,3 @@ jobs:
 
     - name: Run WebKit browser tests
       run: npm run test:browser:webkit
-
-  coverage-summary:
-    runs-on: ubuntu-latest
-    needs: [test, browser-test-chromium, browser-test-firefox, browser-test-webkit]
-    if: |
-      github.ref == 'refs/heads/master' && 
-      github.event_name == 'push' && 
-      needs.test.result == 'success' &&
-      needs.browser-test-chromium.result == 'success' &&
-      needs.browser-test-firefox.result == 'success' &&
-      needs.browser-test-webkit.result == 'success'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22.x'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
-
-    - name: Run tests with coverage
-      run: npm run test:cover
-
-    - name: Generate coverage badge data
-      run: |
-        # Generate coverage badge and details JSON files using Node.js
-        node -e "
-        const fs = require('fs');
-        const coverage = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
-        const statements = Math.round(coverage.total.statements.pct);
-        const lines = Math.round(coverage.total.lines.pct);
-        const functions = Math.round(coverage.total.functions.pct);
-        const branches = Math.round(coverage.total.branches.pct);
-        
-        // Create shields.io compatible JSON
-        const badge = {
-          schemaVersion: 1,
-          label: 'coverage',
-          message: statements + '%',
-          color: statements >= 90 ? 'brightgreen' : statements >= 80 ? 'green' : statements >= 70 ? 'yellow' : 'red'
-        };
-        fs.writeFileSync('coverage/coverage-badge.json', JSON.stringify(badge, null, 2));
-        
-        // Create detailed coverage JSON
-        const details = {
-          statements,
-          lines,
-          functions,
-          branches,
-          overall: statements
-        };
-        fs.writeFileSync('coverage/coverage-details.json', JSON.stringify(details, null, 2));
-        
-        console.log('Coverage badge generated:', badge);
-        console.log('Coverage details generated:', details);
-        "
-
-    - name: Prepare GitHub Pages content
-      run: |
-        # Create a temporary directory for GitHub Pages
-        mkdir -p pages-content
-        
-        # Copy the lcov-report content to the root of pages-content
-        cp -r coverage/lcov-report/* pages-content/
-        
-        # Copy badge and summary files to root level for direct access
-        cp coverage/coverage-badge.json pages-content/
-        cp coverage/coverage-summary.json pages-content/
-        cp coverage/coverage-details.json pages-content/
-        
-        # Also make raw coverage files available in a subdirectory
-        mkdir -p pages-content/raw
-        cp coverage/lcov.info pages-content/raw/
-        cp coverage/coverage-summary.json pages-content/raw/
-        cp coverage/coverage-badge.json pages-content/raw/
-        cp coverage/coverage-details.json pages-content/raw/
-        
-        # Create a simple index redirect if needed (lcov-report/index.html becomes the main page)
-        echo "GitHub Pages content prepared:"
-        ls -la pages-content/
-
-    - name: Upload coverage reports
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: pages-content/
-
-  deploy-pages:
-    if: github.ref == 'refs/heads/master'
-    needs: coverage-summary
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4

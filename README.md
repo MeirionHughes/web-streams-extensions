@@ -569,7 +569,7 @@ let result = await toArray(
 
 #### mapSync\<T, R>(select: (chunk: T) => R): Op\<T, R>
 
-Synchronous version of map for better performance when no async operations are needed.
+Synchronous version of `map` for better performance when no async operations are needed. Also allows explicitly mapping to `Promise` objects, where the normal `map` would `await` the select result. 
 
 ```ts
 let result = await toArray(

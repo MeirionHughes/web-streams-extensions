@@ -327,6 +327,27 @@ describe("mapSync", () => {
       
       expect(result).to.deep.equal(['hello', 'world', 'test']);
     });
+
+    it("should explicitly support returning promises", async () => {
+      const input = ['hello123', 'world456', 'test789'];
+      
+      const resultTasks = await toArray(pipe(
+        from(input),
+        mapSync((str: string) => Promise.resolve(str.replace(/\d+/g, '')))
+      ));
+
+      // ensure each item is a Promise-like (has a then function)
+      expect(resultTasks).to.be.an('array').with.lengthOf(input.length);
+      for (const [idx, task] of (resultTasks as any[]).entries()) {
+        expect(task, `item ${idx} should be a Promise-like`).to.be.instanceOf(Promise);
+        expect((task as any).then, `item ${idx} should have a then function`).to.be.a('function');
+      }
+
+      const result = await Promise.all(resultTasks);
+      
+      expect(result).to.deep.equal(['hello', 'world', 'test']);
+    });
+
   });
 
   describe("Virtual Time", () => {

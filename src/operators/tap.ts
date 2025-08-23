@@ -20,8 +20,8 @@ import { mapSync } from "./mapSync.js";
  * // Emits: 2, 4, 6
  * ```
  */
-export function tap<T>(cb: (chunk: T, index: number) => void): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+export function tap<T>(cb: (chunk: T, index: number) => void): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     return mapSync((chunk: T, index: number) => {
       try {
         cb(chunk, index);
@@ -30,6 +30,6 @@ export function tap<T>(cb: (chunk: T, index: number) => void): (src: ReadableStr
         console.error('Error in tap operator:', err);
       }
       return chunk;
-    })(src, opts);
+    })(src, strategy);
   };
 }

@@ -24,13 +24,13 @@ import { sleep } from "../utils/sleep.js";
  */
 export function delay<T>(duration: number): (
   src: ReadableStream<T>,
-  opts?: { highWaterMark?: number }
+  strategy?: QueuingStrategy<T>
 ) => ReadableStream<T> {
   if (duration < 0) {
     throw new Error("Delay duration must be non-negative");
   }
 
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
 
     async function flush(controller: ReadableStreamDefaultController<T>) {
@@ -65,6 +65,6 @@ export function delay<T>(duration: number): (
           reader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

@@ -22,7 +22,7 @@ export interface MapSelector<T, R> {
   (chunk: T, index:number): R | Promise<R>
 }
 
-export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
+export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T>, strategy?: QueuingStrategy<R>) => ReadableStream<R> {
   let reader: ReadableStreamDefaultReader<T> = null;
   let index = 0;
   async function flush(controller: ReadableStreamDefaultController<R>) {
@@ -55,7 +55,7 @@ export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T
     }
   }
   
-  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<R> = { highWaterMark: 16 }) {
     return new ReadableStream<R>({
       start(controller) {
         reader = src.getReader();
@@ -78,6 +78,6 @@ export function map<T, R = T>(select: MapSelector<T, R>): (src: ReadableStream<T
           }
         }
       }
-    }, opts );
+    }, strategy);
   }
 }

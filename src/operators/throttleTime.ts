@@ -30,14 +30,14 @@ export interface ThrottleConfig {
 export function throttleTime<T>(
   duration: number,
   config?: ThrottleConfig
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
   if (duration < 0) {
     throw new Error("Throttle duration must be non-negative");
   }
 
   const { leading = true, trailing = false } = config || {};
 
-  return function(src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+  return function(src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     // Special case: if both leading and trailing are false, emit nothing
     if (!leading && !trailing) {
       return new ReadableStream<T>({
@@ -56,7 +56,7 @@ export function throttleTime<T>(
             reader.releaseLock();
           }
         }
-      }, { highWaterMark: opts?.highWaterMark ?? 16 });
+      }, strategy);
     }
 
     let sourceReader: ReadableStreamDefaultReader<T> | null = null;
@@ -220,6 +220,6 @@ export function throttleTime<T>(
           sourceReader = null;
         }
       }
-    }, { highWaterMark: opts?.highWaterMark ?? 16 });
+    }, strategy);
   };
 }

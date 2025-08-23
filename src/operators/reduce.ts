@@ -20,8 +20,8 @@
 export function reduce<T, R = T>(
   accumulator: (acc: R, value: T, index: number) => R | Promise<R>,
   seed: R
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<R>) => ReadableStream<R> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<R> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let acc = seed;
     let index = 0;
@@ -56,6 +56,6 @@ export function reduce<T, R = T>(
           reader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

@@ -1,7 +1,7 @@
 import { from } from "../from.js";
 
-export function concatAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, opts?: { highWaterMark?: number }) {
+export function concatAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
+  return function (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let readerSrc: ReadableStreamDefaultReader<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>> = null;
     let reader: ReadableStreamDefaultReader<T> = null;
     let pendingValue: T | null = null;
@@ -108,7 +108,7 @@ export function concatAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise
         }
         pendingValue = null;
       }
-    }, { highWaterMark: opts?.highWaterMark ?? 16 });
+    }, strategy);
   }
 }
 

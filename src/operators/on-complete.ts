@@ -19,7 +19,7 @@ const noop = function(){void 0};
  *   )
  * ```
  */
-export function onComplete<T>(cb: () => void): (src: ReadableStream<T>, opts?: { highWaterMark: number; }) => ReadableStream<T>
+export function onComplete<T>(cb: () => void): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T>
 
 /**
  * Creates an operator that attaches a unified lifecycle callback to a stream.
@@ -45,7 +45,7 @@ export function onComplete<T>(cb: () => void): (src: ReadableStream<T>, opts?: {
  *   )
  * ```
  */
-export function onComplete<T>(cb: (reasonOrError?:any) => void, joinErrorCancel: boolean): (src: ReadableStream<T>, opts?: { highWaterMark: number; }) => ReadableStream<T>
+export function onComplete<T>(cb: (reasonOrError?:any) => void, joinErrorCancel: boolean): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T>
 
 /**
  * Implementation of the onComplete operator.
@@ -72,7 +72,7 @@ export function onComplete<T>(cb: (reasonOrError?:any) => void, joinErrorCancel:
  * @param joinErrorCancel Whether to bundle all lifecycle events into one callback
  * @returns A transform function that can be used with pipe()
  */
-export function onComplete<T>(cb: (reasonOrError?:any) => void, joinErrorCancel: boolean = false): (src: ReadableStream<T>, opts?: { highWaterMark: number; }) => ReadableStream<T> {
+export function onComplete<T>(cb: (reasonOrError?:any) => void, joinErrorCancel: boolean = false): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
   if (joinErrorCancel) {
     // Bundle complete, error, and cancel into the single callback
     return on({

@@ -39,18 +39,18 @@
  */
 export function distinctUntilKeyChanged<T, K extends keyof T>(
   key: K
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T>;
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T>;
 
 export function distinctUntilKeyChanged<T, K extends keyof T>(
   key: K,
   compare: (x: T[K], y: T[K]) => boolean
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T>;
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T>;
 
 export function distinctUntilKeyChanged<T, K extends keyof T>(
   key: K,
   compare?: (x: T[K], y: T[K]) => boolean
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let hasValue = false;
     let previousValue: T[K];
@@ -99,6 +99,6 @@ export function distinctUntilKeyChanged<T, K extends keyof T>(
           reader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

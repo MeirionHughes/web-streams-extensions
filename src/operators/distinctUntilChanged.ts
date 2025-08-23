@@ -17,8 +17,8 @@
  */
 export function distinctUntilChanged<T>(
   compare?: (previous: T, current: T) => boolean
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let hasValue = false;
     let previousValue: T;
@@ -65,6 +65,6 @@ export function distinctUntilChanged<T>(
           reader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

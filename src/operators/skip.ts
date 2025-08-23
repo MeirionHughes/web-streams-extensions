@@ -1,10 +1,10 @@
 
 /**
- * buffer elements and then send an array to the reader. 
- * @param count elements to buffer before enqueue
+ * Skips the first count elements from the source stream.
+ * @param count Number of elements to skip before emitting
  */
-export function skip<T>(count: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> { 
-  return function(src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+export function skip<T>(count: number): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> { 
+  return function(src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
 
     async function flush(controller: ReadableStreamDefaultController<T>) {
@@ -43,6 +43,6 @@ export function skip<T>(count: number): (src: ReadableStream<T>, opts?: { highWa
           reader = null;
         }
       }
-    }, { highWaterMark: opts?.highWaterMark ?? 16 });
+    }, strategy);
   }
 }

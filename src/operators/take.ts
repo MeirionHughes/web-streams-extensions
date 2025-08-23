@@ -15,12 +15,12 @@
  * let result = await toArray(stream);
  * ```
  */
-export function take<T>(count: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
+export function take<T>(count: number): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
   if (count < 0) {
     throw new Error("Take count must be non-negative");
   }
   
-  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let taken = 0;
 
@@ -94,6 +94,6 @@ export function take<T>(count: number): (src: ReadableStream<T>, opts?: { highWa
           }
         }
       }
-    }, { highWaterMark: opts?.highWaterMark ?? 16 });
+    }, strategy);
   }
 }

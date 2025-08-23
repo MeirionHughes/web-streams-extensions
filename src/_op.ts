@@ -1,12 +1,14 @@
 
 /**
  * Represents a unary function that transforms a source with optional configuration.
- * 
+ * @param source input stream
+ * @param strategy QueuingStrategy for the output stream.
+ * @returns output stream 
  * @template T The input type
  * @template R The output type
  */
 export interface UnaryFunction<T, R> {
-  (source: T, opt?: { highWaterMark?: number }): R;
+  (source: ReadableStream<T>, strategy?: QueuingStrategy<R>): ReadableStream<R>;
 }
 
 /**
@@ -16,4 +18,4 @@ export interface UnaryFunction<T, R> {
  * @template T The input stream type
  * @template R The output stream type
  */
-export type Op<T, R> = UnaryFunction<ReadableStream<T>, ReadableStream<R>> | TransformStream<T, R>;
+export type Op<T, R> = UnaryFunction<T, R> | TransformStream<T, R>;

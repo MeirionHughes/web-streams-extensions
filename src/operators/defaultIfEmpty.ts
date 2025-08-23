@@ -31,9 +31,9 @@
  */
 export function defaultIfEmpty<T>(defaultValue: T): (
   src: ReadableStream<T>, 
-  opts?: { highWaterMark?: number }
+  strategy?: QueuingStrategy<T>
 ) => ReadableStream<T> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let hasEmitted = false;
 
@@ -75,6 +75,6 @@ export function defaultIfEmpty<T>(defaultValue: T): (
           reader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

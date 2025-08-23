@@ -49,12 +49,12 @@ export interface MergeMapProjector<T, R> {
 export function mergeMap<T, R>(
   project: MergeMapProjector<T, R>,
   concurrent: number = Infinity
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<R>) => ReadableStream<R> {
   if (concurrent <= 0) {
     throw new Error("Concurrency limit must be greater than zero");
   }
 
-  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<R> = { highWaterMark: 16 }) {
     let index = 0;
     const abortControllers = new Set<AbortController>();
     
@@ -114,6 +114,6 @@ export function mergeMap<T, R>(
         }
         abortControllers.clear();
       }
-    }, opts);
+    }, strategy);
   };
 }

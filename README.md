@@ -6,7 +6,7 @@
 
 A collection helper methods for WebStreams, inspired by ReactiveExtensions. 
 
-## Contributing
+## Contributingf
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
@@ -225,6 +225,7 @@ let inputB = [3, 4];
 let expected = [1, 2, 3, 4];
 let stream = concat(from(inputA), from(inputB));
 let result = await toArray(stream);
+```
 
 ### zip(...sources: ReadableStream\<T>[], selector?: Function): ReadableStream
 
@@ -380,7 +381,7 @@ const fast = from([1, 2, 3]);
 const slow = timer(1000);
 
 const result = await toArray(pipe(race(fast, slow), take(2)));
-// Result: [1, 2] (fast stream wins)
+// Result: [1, 2, 3] (fast stream wins)
 ```
 
 
@@ -484,6 +485,38 @@ function opmaker(args){
 }
 ```
 i.e. they do not cache or store values within the opmaker scope. This means that they are compatible with the retryPipe, where it will regenerate and repipe the op function pipeline on each retry. If you use custom operators, ensure they follow the same rule. 
+
+
+### toTransform (operators > TransformStreams)
+
+Sometimes you want to use existing operators as native Web Streams TransformStreams (for example to use with `pipeThrough`). The `toTransform` helper converts any unary operator factory into a constructable `TransformStream` class. This allows you to do:
+
+```ts
+import { toTransform } from 'web-streams-extensions';
+import { map } from 'web-streams-extensions/operators';
+
+const MapTransform = toTransform(map);
+
+...
+
+source.pipeThrough(new MapTransform((x: number) => x * 2));
+```
+
+For convenience, all operators are re-exported as TransformStream constructors from `web-streams-extensions/transformers`. For example:
+
+```ts
+import { MapTransform } from 'web-streams-extensions/transformers';
+
+someStream
+  .pipeThrough(new MapTransform((x: number) => x * 2))
+  .pipeTo(...
+```
+
+️⚠️`web-streams-extensions/transformers` may not be tree-shakeable unless your bundler understands `/* @__PURE__ */`
+
+```ts
+export const BufferTransform = /* @__PURE__ */ toTransform(buffer);
+```
 
 ## Creation Functions
 

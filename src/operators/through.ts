@@ -24,8 +24,8 @@
  * // Emits: "HELLO", "WORLD"
  * ```
  */
-export function through<T, R = T>(dst: TransformStream<T, R>): (src: ReadableStream<T>, opt?: { highWaterMark?: number }) => ReadableStream<R> {
-    return function (src: ReadableStream<T>, opt?: { highWaterMark?: number }) {
+export function through<T, R = T>(dst: TransformStream<T, R>): (src: ReadableStream<T>, strategy?: QueuingStrategy<R>) => ReadableStream<R> {
+    return function (src: ReadableStream<T>, strategy: QueuingStrategy<R> = { highWaterMark: 16 }) {
         if (!dst || typeof dst.readable === 'undefined' || typeof dst.writable === 'undefined') {
             throw new Error('Invalid TransformStream provided to through operator');
         }

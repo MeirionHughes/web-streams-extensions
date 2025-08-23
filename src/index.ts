@@ -23,6 +23,7 @@ export * from "./timer.js";
 export * from "./to-array.js";
 export * from "./to-promise.js";
 export * from "./to-string.js";
+export * from "./to-transform.js";
 export * from "./zip.js";
 export * from "./interval.js";
 

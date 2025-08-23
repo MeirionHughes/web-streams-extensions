@@ -25,8 +25,8 @@
  */
 export function skipWhile<T>(
   predicate: (value: T, index: number) => boolean
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let isSkipping = true;
     let index = 0;
@@ -74,6 +74,6 @@ export function skipWhile<T>(
           reader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

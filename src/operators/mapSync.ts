@@ -22,12 +22,15 @@ export interface MapSyncSelector<T, R> {
   (chunk: T, index: number): R | undefined;
 }
 
-export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
+export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: ReadableStream<T>, strategy?: QueuingStrategy<R>) => ReadableStream<R> {
   let reader: ReadableStreamDefaultReader<T> | null = null;
   let index = 0;
   async function flush(controller: ReadableStreamDefaultController<R>) {
     try {
-      while (controller.desiredSize > 0 && reader != null) {
+      // When pull() is called, we should process at least one item even if desiredSize is 0
+      // This ensures proper pull-based streaming with highWaterMark: 0
+      let processedAtLeastOne = false;
+      while ((controller.desiredSize > 0 || !processedAtLeastOne) && reader != null) {
         const next = await reader.read();
         if (next.done) {
           controller.close();
@@ -41,7 +44,9 @@ export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: Readable
             const mapped = select(next.value, index++);
             if (mapped !== undefined) {
               controller.enqueue(mapped);
+              processedAtLeastOne = true;
             }
+            // If we filtered out the value (undefined), continue trying
           } catch (err) {
             controller.error(err);
             return;
@@ -63,7 +68,7 @@ export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: Readable
     }
   }
 
-  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<R> = { highWaterMark: 16 }) {
     return new ReadableStream<R>({
       start(controller) {
         reader = src.getReader();
@@ -86,6 +91,6 @@ export function mapSync<T, R = T>(select: MapSyncSelector<T, R>): (src: Readable
           }
         }
       }
-    }, opts);
+    }, strategy);
   };
 }

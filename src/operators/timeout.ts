@@ -14,12 +14,12 @@
  * );
  * ```
  */
-export function timeout<T>(duration: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
+export function timeout<T>(duration: number): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
   if (duration <= 0) {
     throw new Error("Timeout duration must be positive");
   }
 
-  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
@@ -117,6 +117,6 @@ export function timeout<T>(duration: number): (src: ReadableStream<T>, opts?: { 
           }
         }
       }
-    }, { highWaterMark: opts?.highWaterMark ?? 16 });
+    }, strategy);
   }
 }

@@ -170,7 +170,7 @@ jobs:
       run: npm ci
 
     - name: Run tests with coverage
-      run: npm test
+      run: npm test:cover
 
     - name: Upload coverage to Codecov
       if: github.event_name == 'push'

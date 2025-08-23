@@ -32,8 +32,8 @@
  */
 export function count<T>(
   predicate?: (value: T, index: number) => boolean
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<number> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<number>) => ReadableStream<number> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<number> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let counter = 0;
     let index = 0;
@@ -75,6 +75,6 @@ export function count<T>(
           reader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

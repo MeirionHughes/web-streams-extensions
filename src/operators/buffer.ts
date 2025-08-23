@@ -14,12 +14,12 @@
  * let result = await toArray(stream);
  * ```
  */
-export function buffer<T>(count: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T[]> { 
+export function buffer<T>(count: number): (src: ReadableStream<T>, strategy?: QueuingStrategy<T[]>) => ReadableStream<T[]> {
   if (count <= 0) {
     throw new Error("Buffer count must be greater than 0");
   }
-  
-  return function(src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T[]> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let buffer: T[] = [];
 
@@ -27,9 +27,9 @@ export function buffer<T>(count: number): (src: ReadableStream<T>, opts?: { high
       try {
         while (controller.desiredSize > 0 && reader != null) {
           let next = await reader.read();
-          if(next.done){
+          if (next.done) {
             // Emit final buffer if it has elements
-            if(buffer.length > 0 ){              
+            if (buffer.length > 0) {
               controller.enqueue(buffer);
               buffer = [];
             }
@@ -37,15 +37,15 @@ export function buffer<T>(count: number): (src: ReadableStream<T>, opts?: { high
             if (reader) {
               reader.releaseLock();
               reader = null;
-            }                     
-          }else {
+            }
+          } else {
             buffer.push(next.value);
             // Emit buffer when it reaches the target count
-            if(buffer.length >= count){              
+            if (buffer.length >= count) {
               controller.enqueue(buffer);
               buffer = [];
             }
-          }          
+          }
         }
       } catch (err) {
         controller.error(err);
@@ -69,8 +69,8 @@ export function buffer<T>(count: number): (src: ReadableStream<T>, opts?: { high
       pull(controller) {
         return flush(controller);
       },
-      async cancel(reason?:any) {
-        if(reader){
+      async cancel(reason?: any) {
+        if (reader) {
           try {
             await reader.cancel(reason);
             reader.releaseLock();
@@ -81,6 +81,6 @@ export function buffer<T>(count: number): (src: ReadableStream<T>, opts?: { high
           }
         }
       }
-    }, { highWaterMark: opts?.highWaterMark ?? 16 });
+    }, strategy);
   }
 }

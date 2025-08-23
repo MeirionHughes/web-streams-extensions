@@ -48,8 +48,8 @@ export interface ConcatMapProjector<T, R> {
 
 export function concatMap<T, R>(
   project: ConcatMapProjector<T, R>
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
-  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<R>) => ReadableStream<R> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<R> = { highWaterMark: 16 }) {
     let index = 0;
     let abortController: AbortController | null = null;
     
@@ -101,6 +101,6 @@ export function concatMap<T, R>(
           abortController.abort();
         }
       }
-    }, opts);
+    }, strategy);
   };
 }

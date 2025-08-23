@@ -60,7 +60,7 @@ export type LifecycleCallbacks = {
  *   )
  * ```
  */
-export function on<T>(callbacks: LifecycleCallbacks): (src: ReadableStream<T>, opts?: { highWaterMark: number; }) => ReadableStream<T> {
+export function on<T>(callbacks: LifecycleCallbacks): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
   let reader: ReadableStreamDefaultReader<T> | null = null;
   let cancelled = false;
 
@@ -109,7 +109,7 @@ export function on<T>(callbacks: LifecycleCallbacks): (src: ReadableStream<T>, o
     }
   }
 
-  return function (src: ReadableStream<T>, opts?: { highWaterMark: number; }) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     return new ReadableStream<T>({
       start(controller) {
         reader = src.getReader();
@@ -147,6 +147,6 @@ export function on<T>(callbacks: LifecycleCallbacks): (src: ReadableStream<T>, o
           }
         }
       }
-    }, opts);
+    }, strategy);
   };
 }

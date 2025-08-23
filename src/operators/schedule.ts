@@ -20,7 +20,7 @@ import { IScheduler } from "../_scheduler.js";
  * // Items are processed with idle-time yielding
  * ```
  */
-export function schedule<T>(scheduler: IScheduler): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
+export function schedule<T>(scheduler: IScheduler): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
   let reader: ReadableStreamDefaultReader<T> | null = null;
 
   async function flush(controller: ReadableStreamDefaultController<T>) {
@@ -62,7 +62,7 @@ export function schedule<T>(scheduler: IScheduler): (src: ReadableStream<T>, opt
     }
   }
 
-  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     if (!scheduler || typeof scheduler.schedule !== 'function') {
       throw new Error('Invalid scheduler provided to schedule operator');
     }
@@ -89,6 +89,6 @@ export function schedule<T>(scheduler: IScheduler): (src: ReadableStream<T>, opt
           }
         }
       }
-    }, opts);
+    }, strategy);
   };
 }

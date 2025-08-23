@@ -39,9 +39,9 @@ interface QueueItem<T> {
 
 export function switchAll<T>(): (
   src: ReadableStream<ReadableStream<T> | Promise<ReadableStream<T>>>, 
-  opts?: { highWaterMark?: number }
+  strategy?: QueuingStrategy<T>
 ) => ReadableStream<T> {
-  return function (src: ReadableStream<ReadableStream<T> | Promise<ReadableStream<T>>>, { highWaterMark = 16 } = {}) {
+  return function (src: ReadableStream<ReadableStream<T> | Promise<ReadableStream<T>>>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     
     let queue: BlockingQueue<QueueItem<T>>;
     let currentInnerReader: ReadableStreamDefaultReader<T> | null = null;
@@ -219,6 +219,6 @@ export function switchAll<T>(): (
       cancel() {
         cleanup();
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

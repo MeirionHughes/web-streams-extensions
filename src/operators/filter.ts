@@ -18,13 +18,13 @@ import { mapSync } from "./mapSync.js";
  * // Emits: 2, 4, 6
  * ```
  */
-export function filter<T, S extends T>(predicate: (chunk: T) => chunk is S): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<S> 
-export function filter<T>(predicate: (chunk: T) => boolean): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T>
-export function filter<T>(predicate: (chunk: T) => boolean): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src, opts?: { highWaterMark?: number }) {
+export function filter<T, S extends T>(predicate: (chunk: T) => chunk is S): (src: ReadableStream<T>, strategy?: QueuingStrategy<S>) => ReadableStream<S> 
+export function filter<T>(predicate: (chunk: T) => boolean): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T>
+export function filter<T>(predicate: (chunk: T) => boolean): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
+  return function (src, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     return (mapSync((chunk: T) => { 
       if (predicate(chunk)) return chunk;
       // Return undefined to filter out this value (map will not enqueue undefined values)
-    }))(src, opts);
+    }))(src, strategy);
   }
 }

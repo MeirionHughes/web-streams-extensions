@@ -25,9 +25,9 @@
  */
 export function pairwise<T>(): (
   src: ReadableStream<T>, 
-  opts?: { highWaterMark?: number }
+  strategy?: QueuingStrategy<[T, T]>
 ) => ReadableStream<[T, T]> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<[T, T]> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let hasPrevious = false;
     let previous: T;
@@ -71,6 +71,6 @@ export function pairwise<T>(): (
           reader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

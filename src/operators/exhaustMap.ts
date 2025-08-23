@@ -45,8 +45,8 @@ export interface ExhaustMapProjector<T, R> {
   (value: T, index: number, signal?: AbortSignal): ReadableStream<R> | Promise<R> | Iterable<R> | AsyncIterable<R>;
 }
 
-export function exhaustMap<T, R>(projector: ExhaustMapProjector<T, R>): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+export function exhaustMap<T, R>(projector: ExhaustMapProjector<T, R>): (src: ReadableStream<T>, strategy?: QueuingStrategy<R>) => ReadableStream<R> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<R> = { highWaterMark: 16 }) {
     let cancelled = false;
     let index = 0;
     let currentAbortController: AbortController | null = null;
@@ -200,6 +200,6 @@ export function exhaustMap<T, R>(projector: ExhaustMapProjector<T, R>): (src: Re
           currentAbortController.abort();
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

@@ -20,8 +20,8 @@
 export function scan<T, R = T>(
   accumulator: (acc: R, value: T, index: number) => R | Promise<R>,
   seed?: R
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<R>) => ReadableStream<R> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<R> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let acc: R | undefined = seed;
     let index = 0;
@@ -68,6 +68,6 @@ export function scan<T, R = T>(
           reader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

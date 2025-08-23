@@ -34,8 +34,8 @@ import { from } from "../from.js";
  * ```
  */
 
-export function exhaustAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, { highWaterMark = 16 } = {}) {
+export function exhaustAll<T>(): (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
+  return function (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let cancelled = false;
     const ignoredStreams: ReadableStream<T>[] = []; // Track ignored streams for cleanup
     
@@ -169,6 +169,6 @@ export function exhaustAll<T>(): (src: ReadableStream<ReadableStream<T> | Promis
         }
         ignoredStreams.length = 0; // Clear the array
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

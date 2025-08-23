@@ -15,8 +15,8 @@
  * let result = await toArray(stream);
  * ```
  */
-export function last<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function(src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+export function last<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
+  return function(src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader = src.getReader();
     let lastValue: T | undefined = undefined;
     let hasValue = false;
@@ -72,6 +72,6 @@ export function last<T>(selector:(chunk:T)=>boolean=()=>true): (src: ReadableStr
           }
         }
       }    
-    }, { highWaterMark: opts?.highWaterMark ?? 16 })
+    }, strategy)
   }
 }

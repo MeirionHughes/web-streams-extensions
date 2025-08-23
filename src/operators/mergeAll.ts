@@ -45,13 +45,13 @@ import { toArray } from "../to-array.js";
  */
 export function mergeAll<T>(
   concurrent: number = Infinity
-): (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>) => ReadableStream<T> {
+): (src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, strategy?:QueuingStrategy<T>) => ReadableStream<T> {
   if (concurrent <= 0) {
     throw new Error("Concurrency limit must be greater than zero");
   }
 
   return function (
-    src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>
+    src: ReadableStream<ReadableStream<T> | Promise<T> | Iterable<T> | AsyncIterable<T>>, strategy: QueuingStrategy<T> = {highWaterMark: 16}
   ): ReadableStream<T> {
     let outerGate = new Gate(concurrent);
     let innerQueue = new BlockingQueue<ReadableStreamReadResult<T>>();
@@ -166,6 +166,6 @@ export function mergeAll<T>(
           }
         }
       },
-    });
+    }, strategy);
   };
 }

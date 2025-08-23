@@ -34,27 +34,27 @@
 // Single other stream
 export function withLatestFrom<T, A>(
   other: ReadableStream<A>
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<[T, A]>;
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<[T, A]>) => ReadableStream<[T, A]>;
 
 // Two other streams  
 export function withLatestFrom<T, A, B>(
   otherA: ReadableStream<A>,
   otherB: ReadableStream<B>
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<[T, A, B]>;
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<[T, A, B]>) => ReadableStream<[T, A, B]>;
 
 // Three other streams
 export function withLatestFrom<T, A, B, C>(
   otherA: ReadableStream<A>,
   otherB: ReadableStream<B>,
   otherC: ReadableStream<C>
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<[T, A, B, C]>;
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<[T, A, B, C]>) => ReadableStream<[T, A, B, C]>;
 
 // Implementation
 export function withLatestFrom<T>(...others: ReadableStream<any>[]): (
   src: ReadableStream<T>, 
-  opts?: { highWaterMark?: number }
+  strategy?: QueuingStrategy<[T, ...any[]]>
 ) => ReadableStream<[T, ...any[]]> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<[T, ...any[]]> = { highWaterMark: 16 }) {
     let sourceReader: ReadableStreamDefaultReader<T> = null;
     let otherReaders: ReadableStreamDefaultReader<any>[] = [];
     let latestValues: any[] = new Array(others.length);
@@ -131,6 +131,6 @@ export function withLatestFrom<T>(...others: ReadableStream<any>[]): (
         });
         otherReaders = [];
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

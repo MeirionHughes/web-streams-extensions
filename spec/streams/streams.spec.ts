@@ -11,7 +11,7 @@ describe("streams", () => {
     let buffer = new TransformStream<number>({}, { highWaterMark: 3 });
     let pulled: number[] = [];
 
-    let source = pipe(from(inputA), tap(x => pulled.push(x)));
+    let source = pipe(from(inputA), tap(x => pulled.push(x)), {highWaterMark: 1});
 
     source.pipeTo(buffer.writable);
 
@@ -39,7 +39,7 @@ describe("streams", () => {
       let buffer = new TransformStream<number>({}, { highWaterMark: 3 });
       let pulled: number[] = [];
 
-      let source = pipe(from(input), tap(x => pulled.push(x)));
+      let source = pipe(from(input), tap(x => pulled.push(x)), {highWaterMark: 1});
 
       source.pipeTo(buffer.writable);
 

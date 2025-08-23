@@ -16,8 +16,8 @@
  */
 export function catchError<T>(
   selector: (error: any, caught: ReadableStream<T>) => ReadableStream<T>
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     let fallbackReader: ReadableStreamDefaultReader<T> = null;
     let inFallback = false;
@@ -136,6 +136,6 @@ export function catchError<T>(
           fallbackReader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

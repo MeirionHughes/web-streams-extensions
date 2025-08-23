@@ -5,6 +5,7 @@
   "type": "module",
   "types": "./dist/esm/index.d.ts",
   "main": "./dist/esm/index.cjs",
+  "sideEffects": false,
   "engines": {
     "node": ">=16.0.0"
   },
@@ -16,6 +17,10 @@
     "./operators": {
       "import": "./dist/esm/operators/index.js",
       "require": "./dist/cjs/operators/index.cjs"
+    },   
+    "./transformers": {
+      "import": "./dist/esm/transformers.js",
+      "require": "./dist/cjs/transformers.cjs"
     }
   },
   "scripts": {
@@ -23,8 +28,8 @@
     "build:esm": "tsc --outDir ./dist/esm --declaration true --project tsconfig-esm.json",
     "build:cjs": "tsc --outDir ./dist/cjs --project tsconfig-cjs.json && node scripts/convert-cjs-extensions.cjs",
     "build": "concurrently \"npm run build:cjs\" \"npm run build:esm\"",
-    "test": "c8 --reporter=lcov --reporter=text --exclude=spec/** --exclude=**/*.spec.ts mocha --import tsx/esm ./spec/**/*.spec.ts",
-    "test:cover": "npm run test",
+    "test": "mocha ./spec/**/*.spec.ts",
+    "test:cover": "c8 --reporter=lcov --reporter=text --exclude=spec/** --exclude=**/*.spec.ts mocha ./spec/**/*.spec.ts",
     "test:node": "node --import tsx/esm --import ./scripts/test-setup.js --test ./spec/**/*.spec.ts",
     "test:browser": "node scripts/test-browser.js",
     "test:browser:chromium": "node scripts/test-browser-chromium.js",

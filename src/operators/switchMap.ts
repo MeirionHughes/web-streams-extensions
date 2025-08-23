@@ -65,8 +65,8 @@ interface QueueItem<R> {
 
 export function switchMap<T, R>(
   project: (value: T, index: number, signal?: AbortSignal) => ReadableStream<R> | Promise<ReadableStream<R>>
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<R> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<R>) => ReadableStream<R> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<R> = { highWaterMark: 16 }) {
     
     let queue: BlockingQueue<QueueItem<R>>;
     let currentInnerReader: ReadableStreamDefaultReader<R> | null = null;
@@ -259,6 +259,6 @@ export function switchMap<T, R>(
       cancel() {
         cleanup();
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

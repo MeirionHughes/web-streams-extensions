@@ -22,12 +22,12 @@
  * );
  * ```
  */
-export function debounceTime<T>(duration: number): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
+export function debounceTime<T>(duration: number): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
   if (duration <= 0) {
     throw new Error("Debounce duration must be positive");
   }
 
-  return function (src: ReadableStream<T>, opts?: { highWaterMark?: number }) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let lastValue: T | undefined = undefined;
@@ -128,6 +128,6 @@ export function debounceTime<T>(duration: number): (src: ReadableStream<T>, opts
           }
         }
       }
-    }, { highWaterMark: opts?.highWaterMark ?? 16 });
+    }, strategy);
   }
 }

@@ -5,12 +5,11 @@
     "moduleResolution": "NodeNext",
     "sourceMap": true,
     "inlineSources": true, 
-
     "lib": [
       "ES2022",
       "DOM",
       "DOM.AsyncIterable"
     ]
   },
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "coverage", "dist", "scripts"]
 }

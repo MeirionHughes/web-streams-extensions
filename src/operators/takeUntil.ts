@@ -18,8 +18,8 @@
  */
 export function takeUntil<T, U = any>(
   notifier: ReadableStream<U>
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let sourceReader: ReadableStreamDefaultReader<T> = null;
     let notifierReader: ReadableStreamDefaultReader<U> = null;
     let stopped = false;
@@ -88,6 +88,6 @@ export function takeUntil<T, U = any>(
           notifierReader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

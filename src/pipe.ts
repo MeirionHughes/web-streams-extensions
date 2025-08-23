@@ -5,9 +5,7 @@ import { Op } from "./_op.js";
 
 export type ReadableSource<T> = ReadableLike<T> | ReadableStream<T>
 
-export type PipeOptions = {
-  highWaterMark?: number
-}
+export type PipeOptions = QueuingStrategy
 
 /**
  * Pipes a source stream through a series of operators.
@@ -131,14 +129,15 @@ export function pipe(src: ReadableSource<any>, ...args: any[]): ReadableStream<a
   }
 
   // Extract options from the end of arguments if present
-  let options: PipeOptions = { highWaterMark: 1 }; // default highWaterMark
+  let options: PipeOptions = { highWaterMark: 16 }; // default highWaterMark
   let operators: any[] = args;
 
-  // Check if last argument is options
+  // Check if last argument is options (QueuingStrategy)
   const lastArg = args[args.length - 1];
   if (lastArg && typeof lastArg === 'object' && 
       !lastArg.readable && !lastArg.writable && 
-      typeof lastArg.pipeThrough !== 'function') {
+      typeof lastArg.pipeThrough !== 'function' &&
+      (lastArg.highWaterMark !== undefined || lastArg.size !== undefined)) {
     options = { ...options, ...lastArg };
     operators = args.slice(0, -1);
   }

@@ -31,8 +31,8 @@
  */
 export function distinct<T, K = T>(
   keySelector?: (value: T) => K
-): (src: ReadableStream<T>, opts?: { highWaterMark?: number }) => ReadableStream<T> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+): (src: ReadableStream<T>, strategy?: QueuingStrategy<T>) => ReadableStream<T> {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
     const seenKeys = new Set<K>();
     const getKey = keySelector || ((value: T) => value as unknown as K);
@@ -74,6 +74,6 @@ export function distinct<T, K = T>(
         }
         seenKeys.clear();
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

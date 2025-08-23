@@ -24,10 +24,10 @@
  * ```
  */
 export function ignoreElements<T>(): (
-  src: ReadableStream<T>, 
-  opts?: { highWaterMark?: number }
+  src: ReadableStream<T>,
+  strategy?: QueuingStrategy<never>
 ) => ReadableStream<never> {
-  return function (src: ReadableStream<T>, { highWaterMark = 16 } = {}) {
+  return function (src: ReadableStream<T>, strategy: QueuingStrategy<never> = { highWaterMark: 16 }) {
     let reader: ReadableStreamDefaultReader<T> = null;
 
     async function flush(controller: ReadableStreamDefaultController<never>) {
@@ -61,6 +61,6 @@ export function ignoreElements<T>(): (
           reader = null;
         }
       }
-    }, { highWaterMark });
+    }, strategy);
   };
 }

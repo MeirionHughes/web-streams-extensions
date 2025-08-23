@@ -121,7 +121,7 @@ describe("subject", () => {
 
     const pipePromise = pipe(src.readable, tap(x=>{
       pulled.push(x);   
-    })).pipeTo(subject.writable);
+    }), {highWaterMark: 1}).pipeTo(subject.writable);
 
     let outputTask = toArray(subject.readable);
 

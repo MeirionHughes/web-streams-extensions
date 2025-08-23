@@ -172,11 +172,23 @@ jobs:
     - name: Run tests with coverage
       run: npm run test:cover
 
+    - name: Verify coverage file exists
+      run: |
+        ls -la ./coverage/
+        if [ -f ./coverage/lcov.info ]; then
+          echo "Coverage file found"
+          head -5 ./coverage/lcov.info
+        else
+          echo "Coverage file not found!"
+          exit 1
+        fi
+
     - name: Upload coverage to Codecov
-      if: github.event_name == 'push'
       uses: codecov/codecov-action@v4
       with:
         file: ./coverage/lcov.info
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+        verbose: true

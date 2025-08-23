@@ -6,7 +6,7 @@
 
 A collection helper methods for WebStreams, inspired by ReactiveExtensions. 
 
-## Contributingf
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
@@ -34,41 +34,13 @@ const result = await toArray(stream);
 console.log(result); // [4, 8, 12]
 ```
 
-### Native Web Streams API
-
-A few notes on using the native Web Streams primitives alongside this library:
-
-- piping: The standard `.pipeTo()` and `.pipeThrough()` are available on `ReadableStream`. Use `pipe()` from this library when you want to compose operators in a functional style (it returns a `ReadableStream`).
-
-- Async iteration: Readable streams are async-iterable. You can iterate values with `for await (const chunk of stream)` to consume values one-by-one.
-
-Examples:
-
-```ts
-// Using native async iteration
-for await (const v of of('a', 'b', 'c')) {
-  console.log(v);
-}
-
-// Use pipeTo when piping to a writable stream (native API)
-await from(['a', 'b', 'c'])
-  .pipeTo(new WritableStream({
-    write(chunk) { /* ... */ }
-  }));
-
-// Use pipeThrough if you want to use a native transform
-
-of(1,2,3)
-  .pipeThrough(new TransformStream({
-    transform(value, controller){
-      controller.enqueue(value);
-    }
-  }))
-  .pipeTo(writable);
-
-```
-
 ⚠️ReadableStreams are not recoverable. If you start and consume a stream, that instance cannot be reused.  
+
+### Operators 
+
+Operators are functions of the form: 
+`type Op<T, R> = (src: ReadableStream<T>) => ReadableStream<R>`
+This only requires ReadableStream to be implemented/available with getReader support. 
 
 ## API Reference Quick Index
 
@@ -111,7 +83,6 @@ of(1,2,3)
 - `mergeAll()` - Flatten stream of streams concurrently
 - `pairwise()` - Emit previous and current values as pairs
 
-
 ### Filtering Operators
 - `filter()` - Filter values by predicate
 - `distinctUntilChanged()` - Remove consecutive duplicates
@@ -136,7 +107,6 @@ of(1,2,3)
 - `buffer()` - Buffer into arrays of specified size
 - `startWith()` - Prepend values to stream
 
-
 ### Utility Operators
 - `tap()` - Observe values without modification
 - `on()` - Attach lifecycle callbacks
@@ -156,9 +126,8 @@ of(1,2,3)
 - `BehaviourSubject<T>` - Subject that remembers last value
 - `ReplaySubject<T>` - Subject that replays buffered values to new subscribers
 
-## Native Stream API
-
-
+### Utilities
+- `toTransform()` - convert an operator factory to a TransformStream
 
 ## Creation
 
@@ -437,11 +406,7 @@ subscribe(src,
 
 ## Piping
 
-Given inconsistencies in browser support for anything other than ReadableStream, we opted to make an Operator a function of the form:
-
-`type Op<T, R> = (src: ReadableStream<T>) => ReadableStream<R>`
-
-This only requires ReadableStream to be implemented/available with getReader support. To aid in pipelining these operators, a `pipe` method is available: 
+To aid in pipelining operators, a `pipe` and `retryPipe` method is available: 
 
 ### pipe\<T>(src: ReadableStream\<T>, ...ops: Op[], options?: { highWaterMark?: number }): ReadableStream
 
@@ -487,7 +452,7 @@ function opmaker(args){
 i.e. they do not cache or store values within the opmaker scope. This means that they are compatible with the retryPipe, where it will regenerate and repipe the op function pipeline on each retry. If you use custom operators, ensure they follow the same rule. 
 
 
-### toTransform (operators > TransformStreams)
+### toTransform(operatorFactory): TransformStream
 
 Sometimes you want to use existing operators as native Web Streams TransformStreams (for example to use with `pipeThrough`). The `toTransform` helper converts any unary operator factory into a constructable `TransformStream` class. This allows you to do:
 
@@ -513,10 +478,6 @@ someStream
 ```
 
 ️⚠️`web-streams-extensions/transformers` may not be tree-shakeable unless your bundler understands `/* @__PURE__ */`
-
-```ts
-export const BufferTransform = /* @__PURE__ */ toTransform(buffer);
-```
 
 ## Creation Functions
 

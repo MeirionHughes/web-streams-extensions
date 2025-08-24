@@ -1,6 +1,7 @@
 import { expect } from "chai";
-import { from, pipe, toArray, mergeAll } from "../../src/index.js";
+import { from, pipe, toArray, mergeAll, mapSync, defer } from "../../src/index.js";
 import { VirtualTimeScheduler } from "../../src/testing/virtual-tick-scheduler.js";
+import { sleep } from "../../src/utils/sleep.js";
 
 
 describe("mergeAll", () => {
@@ -98,6 +99,51 @@ describe("mergeAll", () => {
       ));
       expect(result.sort()).to.deep.equal([1, 2, 3, 4]);
     });
+
+    it("should handle stream of promises and merge in completion order", async ()=>{
+      // Infinite concurrency shows full parallel completion order
+      // With these delays, full parallel completion is [3,2,1]. 
+      // i.e. because they're all running concurrent and racing, the task/stream 
+      // to complete first is output first. 
+      const input = [1,2,3];
+      const delays: Record<number, number> = { 1: 100, 2: 90, 3: 1 };
+      const expectedParallelOrder = [3,2,1];
+
+      // Use defer to avoid eager execution and make timing explicit
+      const streams = input.map(x => defer(async () => {
+        await sleep(delays[x]);
+        return from([x]);
+      }));
+
+      const result = await toArray(pipe(
+        from(streams), 
+        mergeAll(Infinity)
+      ));
+      expect(result, "resolve order is correct for infinite concurrency").to.deep.eq(expectedParallelOrder);
+    })    
+    
+    it("should handle stream of promises and NOT merge in completion order due to concurrently limit", async ()=>{
+      // Construct a deterministic counterexample for concurrency limiting
+      // One slot only: start [1], then [2], then [3] 
+      // Delays chosen so full parallel order would be [3,2,1], but with limit=1 we get [1,2,3]
+      const input = [1,2,3];
+      const delays: Record<number, number> = { 1: 100, 2: 90, 3: 1 };
+      const expectedParallelOrder = [3,2,1];
+
+      const streams = input.map(x => defer(async () => {
+        await sleep(delays[x]);
+        return from([x]);
+      }));
+
+      const result = await toArray(pipe(
+        from(streams),
+        mergeAll(1)
+      ));
+
+      // With concurrency=1, actual should be [1,2,3]
+      expect(result, "limited concurrency should alter completion order").to.not.deep.eq(expectedParallelOrder);
+      expect(result).to.deep.equal([1, 2, 3]);
+    })
   });
 
   describe("Virtual Time", () => {

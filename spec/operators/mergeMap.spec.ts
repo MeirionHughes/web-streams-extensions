@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { toArray, from, pipe, mergeMap } from '../../src/index.js';
+import { toArray, from, pipe, mergeMap} from '../../src/index.js';
 import { Subject } from '../../src/subjects/subject.js';
 import { parseMarbles } from '../../src/testing/parse-marbles.js';
 import { VirtualTimeScheduler } from '../../src/testing/virtual-tick-scheduler.js';

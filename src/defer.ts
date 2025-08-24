@@ -14,21 +14,21 @@
  * let result = await toArray(defer(() => Promise.resolve(from(input))));
  * ```
  */
-export function defer<T>(src:()=>Promise<ReadableStream<T>> | ReadableStream<T>): ReadableStream<T>{
-  
-  let readable: ReadableStream<T> = null;  
+export function defer<T>(src: () => Promise<ReadableStream<T>> | ReadableStream<T>): ReadableStream<T> {
+
+  let readable: ReadableStream<T> = null;
   let reader: ReadableStreamDefaultReader<T> = null;
-  
+
   async function flush(controller: ReadableStreamDefaultController<T>) {
     try {
-      while (controller.desiredSize > 0 && reader) { 
+      while (controller.desiredSize > 0 && reader) {
         let result = await reader.read();
-        if(result.done){
+        if (result.done) {
           reader.releaseLock();
           reader = null;
           readable = null;
           controller.close();
-          return;    
+          return;
         } else {
           controller.enqueue(result.value);
         }
@@ -48,19 +48,22 @@ export function defer<T>(src:()=>Promise<ReadableStream<T>> | ReadableStream<T>)
 
   return new ReadableStream<T>({
     async start(controller) {
-      try {
-        readable = await src();
-        reader = readable.getReader();
-        return flush(controller);
-      } catch (err) {
-        controller.error(err);
-      }
+      // Don't call src() here - defer until first pull
     },
     async pull(controller) {
+      if (!readable) {
+        try {
+          readable = await src();
+          reader = readable.getReader();
+        } catch (err) {
+          controller.error(err);
+          return;
+        }
+      }
       return flush(controller);
     },
     async cancel(reason?: any) {
-      if(reader){
+      if (reader) {
         try {
           await reader.cancel(reason);
         } catch (err) {
@@ -75,5 +78,5 @@ export function defer<T>(src:()=>Promise<ReadableStream<T>> | ReadableStream<T>)
         }
       }
     }
-  });
+  }, { highWaterMark: 1 });
 }

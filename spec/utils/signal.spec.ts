@@ -305,6 +305,59 @@ describe('Gate', () => {
     expect(gate.queueLength).to.equal(0);
     expect(gate.count).to.equal(2); // 5 - 3 = 2
   });
+
+  it('should allow tasks to race in completion order', async () => {
+    // c) racing: later-started but shorter tasks can finish before earlier longer tasks
+    const gate = new Gate(2);
+    const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+  const completedOrder: number[] = [];
+  // Choose durations with large gaps to reduce flakiness
+  const durations = [200, 100, 30, 10];
+
+    const tasks = durations.map((ms, i) => (async () => {
+      await gate.wait();
+      try {
+        await sleep(ms);
+      } finally {
+        completedOrder.push(i);
+        gate.increment();
+      }
+    })());
+
+    await Promise.all(tasks);
+    // Expect at least one later shorter task (2 or 3) to complete before the longest (0)
+    const before0 = completedOrder.indexOf(2) < completedOrder.indexOf(0) || completedOrder.indexOf(3) < completedOrder.indexOf(0);
+    expect(before0).to.equal(true);
+  });
+
+  it('should block when at capacity until a slot frees', async () => {
+    const gate = new Gate(2);
+    let started = 0;
+
+    const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+    const makeTask = () => (async () => {
+      await gate.wait();
+      started++;
+      try {
+        await sleep(30);
+      } finally {
+        gate.increment();
+      }
+    })();
+
+    const total = 5;
+    const tasks = Array.from({ length: total }, makeTask);
+
+    // Give microtasks/timers a moment
+    await sleep(5);
+    // Only two should have started due to capacity 2
+    expect(started).to.equal(2);
+
+    await Promise.all(tasks);
+    expect(started).to.equal(total);
+  });
 });
 
 describe('BlockingQueue', () => {
@@ -472,5 +525,52 @@ describe('BlockingQueue', () => {
     
     expect(results).to.have.length(10);
     expect(results.sort((a, b) => a - b)).to.deep.equal([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it('should allow later faster producer to deliver first (race)', async () => {
+    // c) race: later task can win if it arrives first at the queue
+    const results: number[] = [];
+
+  const pull1 = queue.pull().then(v => results.push(v));
+
+    // Producer A starts earlier but arrives later (longer delay)
+    const producerA = (async () => {
+      await new Promise(res => setTimeout(res, 10));
+      await queue.push(1);
+    })();
+
+    // Producer B starts later but arrives first (shorter delay)
+    const producerB = (async () => {
+      await new Promise(res => setTimeout(res, 0));
+      await queue.push(2);
+    })();
+
+    // Wait only for the first delivery to establish race winner
+    await pull1;
+
+    // Drain the second producer to avoid leaving a pending pusher
+    const pull2 = queue.pull();
+    await Promise.all([pull2, producerA, producerB]);
+
+    // Expect the value from the faster (later-started) producer B to be delivered first
+    expect(results).to.deep.equal([2]);
+  });
+
+  it('should pair multiple pullers with producers in arrival order (race across many)', async () => {
+    const pulls: Promise<number>[] = [queue.pull(), queue.pull(), queue.pull()];
+
+    // Stagger producers so the one scheduled later arrives first
+    const producers = [
+      (async () => { await new Promise(r => setTimeout(r, 10)); await queue.push(1); })(),
+      (async () => { await new Promise(r => setTimeout(r, 0)); await queue.push(2); })(),
+      (async () => { await new Promise(r => setTimeout(r, 5)); await queue.push(3); })(),
+    ];
+
+    const results = await Promise.all(pulls);
+    await Promise.all(producers);
+
+    // The first pull resolves with the first arriving producer (2), then 3, then 1
+    // Note: Pullers are queued first; producers race to satisfy them.
+    expect(results).to.deep.equal([2, 3, 1]);
   });
 });

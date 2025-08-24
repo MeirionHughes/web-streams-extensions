@@ -38,4 +38,5 @@ export * from "./throttleTime.js";
 export * from "./through.js";
 export * from "./timeout.js";
 export * from "./withLatestFrom.js";
+export * from "./tee.js";
 

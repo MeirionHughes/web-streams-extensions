@@ -1,20 +1,17 @@
 export interface ThrottleConfig {
   /**
-   * If `true`, the resulting stream will emit the first value from the source instantly 
-   * and trigger the timer immediately. the next value will be emitted after the timer expires. 
-   * additional values read during the timer will be ignored. 
-   * If `false`, it will not emit immediately, but will instead trigger the timer to
-   * start the "throttling" process, while queuing the first value to be emitted. 
+   * If `true`, the very first value from the source will be emitted immediately.
+   * If `false`, the very first value will trigger a window but not be emitted.
    *
    * If not provided, defaults to: `true`.
    */
   leading?: boolean;
 
   /**
-   * If 'true' and if the last-read value from the source was not emitted by the throttle, 
-   * the last value will be appended to the output before completion. 
-   * if 'false' and if the last value was received during a throttling event, 
-   * the last value will be ignored. 
+   * If `true`, the very last value stored during a window will be emitted
+   * when the stream ends (only if it hasn't already been emitted).
+   * If `false`, the last stored value is not emitted when the stream ends.
+   * 
    * If not provided, defaults to: `false`.
    */
   trailing?: boolean;
@@ -24,8 +21,9 @@ export interface ThrottleConfig {
  * Emits a value from the source stream, then ignores subsequent source
  * values for `duration` milliseconds, then repeats this process.
  * 
- * Uses a decoupled consumer/producer pattern where consumption from source
- * runs independently from throttled emissions.
+ * The operator has two states:
+ * - window-not-active: emit values immediately and start window timer
+ * - window-active: ignore everything but keep the last value during the window
  */
 export function throttleTime<T>(
   duration: number,
@@ -38,43 +36,23 @@ export function throttleTime<T>(
   const { leading = true, trailing = false } = config || {};
 
   return function(src: ReadableStream<T>, strategy: QueuingStrategy<T> = { highWaterMark: 16 }) {
-    // Special case: if both leading and trailing are false, emit nothing
-    if (!leading && !trailing) {
-      return new ReadableStream<T>({
-        async start(controller) {
-          // Consume the source but emit nothing
-          const reader = src.getReader();
-          try {
-            while (true) {
-              const { done } = await reader.read();
-              if (done) break;
-            }
-            controller.close();
-          } catch (err) {
-            controller.error(err);
-          } finally {
-            reader.releaseLock();
-          }
-        }
-      }, strategy);
-    }
-
     let sourceReader: ReadableStreamDefaultReader<T> | null = null;
-    let isThrottling = false;
-    let lastValue: T | undefined = undefined;
-    let hasLastValue = false;
+    let isWindowActive = false;
+    let lastValueDuringWindow: T | undefined = undefined;
+    let hasLastValueDuringWindow = false;
     let isSourceComplete = false;
     let sourceError: any = null;
-    let throttleTimer: ReturnType<typeof setTimeout> | null = null;
+    let windowTimer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
+    let isVeryFirstValue = true;
     
     // Queue for emission control
     const emissionQueue: T[] = [];
 
-    function clearThrottleTimer() {
-      if (throttleTimer !== null) {
-        clearTimeout(throttleTimer);
-        throttleTimer = null;
+    function clearWindowTimer() {
+      if (windowTimer !== null) {
+        clearTimeout(windowTimer);
+        windowTimer = null;
       }
     }
 
@@ -90,32 +68,23 @@ export function throttleTime<T>(
       return emissionQueue.length > 0;
     }
 
-    function startThrottleWindow() {
-      isThrottling = true;
-      clearThrottleTimer();
+    function startWindow() {
+      isWindowActive = true;
+      clearWindowTimer();
       
       if (duration === 0) {
-        // Zero duration means immediate release
+        // Zero duration means immediate end of window
         setTimeout(() => {
-          isThrottling = false;
-          // Check if we should emit trailing value
-          if (trailing && hasLastValue && !cancelled) {
-            enqueueValue(lastValue!);
-            hasLastValue = false;
-          }
+          isWindowActive = false;
+          // Don't clear hasLastValueDuringWindow - it should persist until stream ends
         }, 0);
         return;
       }
       
-      throttleTimer = setTimeout(() => {
-        throttleTimer = null;
-        isThrottling = false;
-        
-        // Check if we should emit trailing value
-        if (trailing && hasLastValue && !cancelled) {
-          enqueueValue(lastValue!);
-          hasLastValue = false;
-        }
+      windowTimer = setTimeout(() => {
+        windowTimer = null;
+        isWindowActive = false;
+        // Don't clear hasLastValueDuringWindow - it should persist until stream ends
       }, duration);
     }
 
@@ -132,29 +101,43 @@ export function throttleTime<T>(
             break;
           }
 
-          // Update last value for potential trailing emission
-          lastValue = value;
-          hasLastValue = true;
-
-          // Handle value based on throttle state
-          if (!isThrottling) {
-            // Not throttling - can emit leading value
+          // Handle very first value specially
+          if (isVeryFirstValue) {
+            isVeryFirstValue = false;
+            
             if (leading) {
+              // Emit very first value immediately
               enqueueValue(value);
-              hasLastValue = false; // This value will be emitted as leading
-              
-              if (duration === 0) {
-                // Zero duration - all values pass through immediately
-                isThrottling = false;
-              } else {
-                startThrottleWindow();
+              // Clear any stored value since we're emitting immediately
+              hasLastValueDuringWindow = false;
+              if (duration > 0) {
+                startWindow();
               }
-            } else if (trailing) {
-              // Leading false, trailing true - start throttling without emitting
-              startThrottleWindow();
+            } else {
+              // Don't emit very first value, but start window
+              lastValueDuringWindow = value;
+              hasLastValueDuringWindow = true;
+              if (duration > 0) {
+                startWindow();
+              }
             }
+            continue;
           }
-          // If throttling, value is just stored as lastValue for potential trailing emission
+
+          // For all subsequent values
+          if (!isWindowActive) {
+            // window-not-active: emit value immediately and start window
+            enqueueValue(value);
+            // Clear any stored value since we're emitting immediately
+            hasLastValueDuringWindow = false;
+            if (duration > 0) {
+              startWindow();
+            }
+          } else {
+            // window-active: ignore everything but keep the last value
+            lastValueDuringWindow = value;
+            hasLastValueDuringWindow = true;
+          }
         }
       } catch (err) {
         sourceError = err;
@@ -192,10 +175,10 @@ export function throttleTime<T>(
 
             // Check if source is complete
             if (isSourceComplete) {
-              // Handle final trailing emission
-              if (trailing && hasLastValue) {
-                controller.enqueue(lastValue!);
-                hasLastValue = false;
+              // Handle final trailing emission if applicable
+              if (trailing && hasLastValueDuringWindow) {
+                controller.enqueue(lastValueDuringWindow!);
+                hasLastValueDuringWindow = false;
                 continue;
               }
               controller.close();
@@ -212,7 +195,7 @@ export function throttleTime<T>(
 
       cancel(reason?: any) {
         cancelled = true;
-        clearThrottleTimer();
+        clearWindowTimer();
         
         if (sourceReader) {
           sourceReader.cancel(reason).catch(() => {});

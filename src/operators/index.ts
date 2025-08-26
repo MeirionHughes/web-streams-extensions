@@ -37,6 +37,6 @@ export * from "./tap.js";
 export * from "./throttleTime.js";
 export * from "./through.js";
 export * from "./timeout.js";
+export * from "./bridge.js";
 export * from "./withLatestFrom.js";
-export * from "./tee.js";
 

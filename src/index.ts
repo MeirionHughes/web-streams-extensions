@@ -26,6 +26,7 @@ export * from "./to-string.js";
 export * from "./to-transform.js";
 export * from "./zip.js";
 export * from "./interval.js";
+export * from "./tee.js";
 
 export * from "./subscribe.js";
 

@@ -122,27 +122,27 @@ describe("throttleTime", () => {
 
   describe("{ leading: true, trailing: true }", () => {
     
-    it("should emit first and last values in each time window", async () => {
-      // RxJS pattern: '-a-xy-----b--x--cxxx--|'
-      // Expected:     '-a---y----b---x---x---(x|)'
-      // Leading emits immediately, trailing emits last value after throttle
+    it("should emit first value immediately and last stored value when stream ends", async () => {
+      // leading=true: emit very first value immediately
+      // trailing=true: emit last stored value when stream ends
+      // During window: ignore values but keep last one
       
       const input = [1, 2, 3, 4, 5, 6, 7];
       
       const source = from(async function*() {
-        yield input[0]; // t=0: emit 1 immediately (leading)
+        yield input[0]; // t=0: emit 1 immediately (leading=true), start window
         await sleep(10);
-        yield input[1]; // t=10: queued for trailing
+        yield input[1]; // t=10: ignored (window active), stored
         await sleep(10);
-        yield input[2]; // t=20: overwrites trailing queue (only last counts)
-        await sleep(50); // t=70: emit 3 as trailing, start new window (increased gap)
-        yield input[3]; // t=70: emit 4 immediately (leading)
+        yield input[2]; // t=20: ignored (window active), overwrites stored
+        await sleep(50); // t=70: window expires, but trailing only emits at stream end
+        yield input[3]; // t=70: window not active, emit 4 immediately, start new window
         await sleep(10);
-        yield input[4]; // t=80: queued for trailing
-        await sleep(50); // t=130: emit 5 as trailing, start new window (increased gap)
-        yield input[5]; // t=130: emit 6 immediately (leading)
-        await sleep(10);
-        yield input[6]; // t=140: queued for trailing, will emit on completion
+        yield input[4]; // t=80: ignored (window active), stored
+        await sleep(50); // t=130: window expires
+        yield input[5]; // t=130: window not active, emit 6 immediately, start new window
+        yield input[6]; // t=130: ignored (window active), stored as last value
+        // Stream ends, trailing=true so emit stored value (7)
       }());
       
       const result = await toArray(
@@ -152,7 +152,7 @@ describe("throttleTime", () => {
         )
       );
       
-      expect(result).to.deep.equal([1, 3, 4, 5, 6, 7]);
+      expect(result).to.deep.equal([1, 4, 6, 7]);
     });
 
     it("should emit single value if only one is given", async () => {
@@ -193,27 +193,27 @@ describe("throttleTime", () => {
 
   describe("{ leading: false, trailing: true }", () => {
     
-    it("should emit only the last value in each time window", async () => {
-      // RxJS pattern: '-a-xy-----b--x--cxxx--|'
-      // Expected:     '-----y--------x---x---(x|)'
-      // No leading emission, only trailing after throttle window
+    it("should ignore very first value but emit values when window not active and last stored value when stream ends", async () => {
+      // leading=false: ignore very first value  
+      // trailing=true: emit last stored value when stream ends
+      // Values that arrive when window not active should be emitted immediately
       
       const input = [1, 2, 3, 4, 5, 6, 7];
       
       const source = from(async function*() {
-        yield input[0]; // t=0: queued for trailing
+        yield input[0]; // t=0: ignored (very first, leading=false), stored, starts window
         await sleep(10);
-        yield input[1]; // t=10: overwrites trailing queue
+        yield input[1]; // t=10: ignored (window active), overwrites stored
         await sleep(10);
-        yield input[2]; // t=20: overwrites trailing queue
-        await sleep(50); // t=70: emit 3 as trailing (increased gap for browser timing)
-        yield input[3]; // t=70: queued for trailing
+        yield input[2]; // t=20: ignored (window active), overwrites stored
+        await sleep(50); // t=70: window expires, but trailing only emits at stream end
+        yield input[3]; // t=70: window not active, emit 4 immediately, start new window
         await sleep(10);
-        yield input[4]; // t=80: overwrites trailing queue
-        await sleep(50); // t=130: emit 5 as trailing (increased gap for browser timing)
-        yield input[5]; // t=130: queued for trailing
-        await sleep(10);
-        yield input[6]; // t=140: overwrites trailing queue, will emit on completion
+        yield input[4]; // t=80: ignored (window active), stored
+        await sleep(50); // t=130: window expires
+        yield input[5]; // t=130: window not active, emit 6 immediately, start new window
+        yield input[6]; // t=130: ignored (window active), stored as last value
+        // Stream ends, trailing=true so emit stored value (7)
       }());
       
       const result = await toArray(
@@ -223,7 +223,7 @@ describe("throttleTime", () => {
         )
       );
       
-      expect(result).to.deep.equal([3, 5, 7]);
+      expect(result).to.deep.equal([4, 6, 7]);
     });
 
     it("should wait for trailing throttle before completing", async () => {
@@ -268,37 +268,44 @@ describe("throttleTime", () => {
         )
       );
       
-      // First batch
-      await subject.next(1);
-      await subject.next(2);
-      await subject.next(3); // Will be first trailing
+      // First batch - all during window
+      await subject.next(1); // Very first value, ignored (leading=false), stored, starts window
+      await subject.next(2); // Window active, ignored, overwrites stored
+      await subject.next(3); // Window active, ignored, overwrites stored (now stored = 3)
       
-      await sleep(40); // Wait for throttle to expire and emit
+      await sleep(40); // Wait for window to expire
       
-      // Second batch
-      await subject.next(4);
-      await subject.next(5); // Will be second trailing
+      // Second batch - first emitted, rest stored
+      await subject.next(4); // Window not active, emit immediately, start new window
+      await subject.next(5); // Window active, ignored, stored (now stored = 5)
       
-      await sleep(40); // Wait for throttle to expire
+      await sleep(40); // Wait for window to expire
       
-      await subject.complete();
+      await subject.complete(); // Stream ends, trailing=true so emit stored value (5)
       
       const result = await resultPromise;
-      expect(result).to.deep.equal([3, 5]);
+      expect(result).to.deep.equal([4, 5]);
     });
   });
 
   describe("{ leading: false, trailing: false }", () => {
     
-    it("should emit nothing for any input", async () => {
-      // With both leading and trailing false, no values should be emitted
+    it("should ignore very first value but emit subsequent values when window not active", async () => {
+      // leading: false = ignore very first value
+      // trailing: false = don't emit last stored value when stream ends
+      // But values that arrive when window is not active should be emitted
       const input = [1, 2, 3, 4, 5];
       
       const source = from(async function*() {
-        for (const value of input) {
-          yield value;
-          await sleep(10);
-        }
+        yield input[0]; // t=0: very first value, ignored (leading=false), starts window
+        await sleep(10);
+        yield input[1]; // t=10: window active, ignored, stored as last
+        await sleep(10);
+        yield input[2]; // t=20: window active, ignored, overwrites stored
+        await sleep(60); // t=80: window expires (50ms window)
+        yield input[3]; // t=80: window not active, should emit immediately and start new window
+        await sleep(10);
+        yield input[4]; // t=90: window active, ignored, stored as last (trailing=false so not emitted at end)
       }());
       
       const result = await toArray(
@@ -308,10 +315,35 @@ describe("throttleTime", () => {
         )
       );
       
-      expect(result).to.deep.equal([]);
+      // Should emit value 4 (arrives when window not active)
+      // Should ignore value 1 (very first, leading=false)
+      // Should ignore value 5 (last stored, trailing=false)
+      expect(result).to.deep.equal([4]);
     });
 
-    it("should emit nothing for single value", async () => {
+    it("should emit values that arrive between windows", async () => {
+      const input = [1, 2, 3];
+      
+      const source = from(async function*() {
+        yield input[0]; // t=0: very first, ignored (leading=false), starts window
+        await sleep(60); // t=60: window expires (50ms duration)
+        yield input[1]; // t=60: window not active, should emit immediately, starts new window  
+        await sleep(60); // t=120: window expires
+        yield input[2]; // t=120: window not active, should emit immediately
+      }());
+      
+      const result = await toArray(
+        pipe(
+          source,
+          throttleTime(50, { leading: false, trailing: false })
+        )
+      );
+      
+      // Values 2 and 3 arrive when window is not active, so should be emitted
+      expect(result).to.deep.equal([2, 3]);
+    });
+
+    it("should handle single value by ignoring it", async () => {
       const result = await toArray(
         pipe(
           from([42]),
@@ -319,10 +351,11 @@ describe("throttleTime", () => {
         )
       );
       
+      // Single value is the very first value, so ignored due to leading=false
       expect(result).to.deep.equal([]);
     });
 
-    it("should emit nothing for empty stream", async () => {
+    it("should handle empty stream", async () => {
       const result = await toArray(
         pipe(
           from([]),
@@ -333,13 +366,46 @@ describe("throttleTime", () => {
       expect(result).to.deep.equal([]);
     });
 
-    it("should emit nothing even with long delays between values", async () => {
+    it("should emit values when they arrive outside windows", async () => {
+      const subject = new Subject<number>();
+      
+      const resultPromise = toArray(
+        pipe(
+          subject.readable,
+          throttleTime(30, { leading: false, trailing: false })
+        )
+      );
+      
+      // First value - ignored (very first, leading=false), starts window
+      await subject.next(1);
+      await sleep(40); // Wait for window to expire
+      
+      // Second value - should emit (window not active), starts new window  
+      await subject.next(2);
+      await sleep(10); // Still in window
+      await subject.next(3); // Ignored (window active), stored
+      await sleep(30); // Wait for window to expire
+      
+      // Third value - should emit (window not active)
+      await subject.next(4);
+      await sleep(10);
+      await subject.next(5); // Ignored (window active), stored but trailing=false
+      
+      await subject.complete();
+      
+      const result = await resultPromise;
+      // Should emit values that arrived when window was not active
+      expect(result).to.deep.equal([2, 4]);
+    });
+
+    it("should ignore all values when they all arrive during windows", async () => {
       const source = from(async function*() {
-        yield 1;
-        await sleep(100); // Well beyond throttle window
-        yield 2;
-        await sleep(100);
-        yield 3;
+        yield 1; // t=0: very first, ignored (leading=false), starts window
+        await sleep(10);
+        yield 2; // t=10: window active, ignored, stored
+        await sleep(10);
+        yield 3; // t=20: window active, ignored, overwrites stored
+        // Stream ends at t=20, window is still active (50ms), trailing=false so no emission
       }());
       
       const result = await toArray(
@@ -349,7 +415,40 @@ describe("throttleTime", () => {
         )
       );
       
+      // All values ignored: first due to leading=false, others due to active window + trailing=false
       expect(result).to.deep.equal([]);
+    });
+
+    it("should handle rapid succession with window gaps", async () => {
+      const subject = new Subject<number>();
+      
+      const resultPromise = toArray(
+        pipe(
+          subject.readable,
+          throttleTime(50, { leading: false, trailing: false })
+        )
+      );
+      
+      // First batch - all during first window
+      await subject.next(1); // Ignored (very first, leading=false)
+      await subject.next(2); // Ignored (window active)
+      await subject.next(3); // Ignored (window active), stored
+      
+      await sleep(60); // Window expires
+      
+      // Second batch - first emitted, rest ignored
+      await subject.next(4); // Emitted (window not active)
+      await subject.next(5); // Ignored (window active), stored
+      
+      await sleep(60); // Window expires
+      
+      // Third value
+      await subject.next(6); // Emitted (window not active)
+      
+      await subject.complete();
+      
+      const result = await resultPromise;
+      expect(result).to.deep.equal([4, 6]);
     });
   });
 

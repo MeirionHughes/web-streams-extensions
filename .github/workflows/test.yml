@@ -35,6 +35,9 @@ jobs:
         echo "=== Installed package versions ==="
         npm list mocha c8 @types/mocha --depth=0
 
+    - name: Build workers
+      run: npm run build:workers
+
     - name: Run Node.js tests
       run: npm run test:node
 
@@ -54,6 +57,9 @@ jobs:
 
     - name: Install dependencies
       run: npm ci
+
+    - name: Build workers
+      run: npm run build:workers
 
     - name: Get Playwright version
       id: playwright-version
@@ -93,6 +99,9 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
+    - name: Build workers
+      run: npm run build:workers
+
     - name: Get Playwright version
       id: playwright-version
       run: echo "version=$(npm list @web/test-runner-playwright --depth=0 --json | jq -r '.dependencies["@web/test-runner-playwright"].version')" >> $GITHUB_OUTPUT
@@ -131,6 +140,9 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
+    - name: Build workers
+      run: npm run build:workers
+
     - name: Get Playwright version
       id: playwright-version
       run: echo "version=$(npm list @web/test-runner-playwright --depth=0 --json | jq -r '.dependencies["@web/test-runner-playwright"].version')" >> $GITHUB_OUTPUT
@@ -168,6 +180,9 @@ jobs:
 
     - name: Install dependencies
       run: npm ci
+
+    - name: Build workers
+      run: npm run build:workers
 
     - name: Run tests with coverage
       run: npm run test:node:cover

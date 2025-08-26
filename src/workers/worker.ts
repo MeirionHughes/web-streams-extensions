@@ -37,12 +37,8 @@ class WorkerMessageRouter extends MessageRouter {
   }
 
   private handleIdRequest(msg: IdRequestMsg): void {
-    console.log('[Worker] WorkerMessageRouter: Received ID request with requestId:', msg.requestId);
-    
     // Generate a new stream ID and send it back
     const streamId = this.generateId();
-    
-    console.log('[Worker] WorkerMessageRouter: Sending ID response with streamId:', streamId, 'for requestId:', msg.requestId);
     
     this.postMessage({
       type: 'id-response',
@@ -109,7 +105,6 @@ class WorkerMessageRouter extends MessageRouter {
       try {
         workerStreamHandler(request);
       } catch (error) {
-        console.error('Error in stream handler:', error);
         request.reject((error as any).message || 'Stream handler error');
       }
     } else {
@@ -120,7 +115,6 @@ class WorkerMessageRouter extends MessageRouter {
   private handleDataToWorker(msg: DataToWorkerMsg): void {
     const streamInfo = this.getStream(msg.id);
     if (!streamInfo) {
-      console.warn(`Received data for unknown stream ${msg.id}`);
       return;
     }
 
@@ -164,22 +158,15 @@ function initializeWorker(getTransferables?: GetTransferablesFn): void {
       } else {
         self.postMessage(msg);
       }
-    } else {
-      console.error('Worker postMessage not available');
     }
   }, getTransferables);
 
   // Listen for messages from main thread
   if (typeof self !== 'undefined') {
     self.onmessage = (event: MessageEvent) => {
-      console.log('[Worker] Received message from main thread:', event.data);
       const msg: ProtocolMsg = event.data;
       if (msg && typeof msg === 'object' && 'type' in msg) {
-        console.log(`[Worker] Valid message with type: ${msg.type}`);
-        // Messages can have either 'id' (stream messages) or 'requestId' (id-request/id-response)
         workerRouter!.route(msg);
-      } else {
-        console.warn('[Worker] Invalid message format:', msg);
       }
     };
   }

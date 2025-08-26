@@ -27,17 +27,20 @@ class MainThreadRouter extends MessageRouter {
     this.setupHandlers();
     
     // Listen for messages from worker
-    this.worker.onmessage = (event: MessageEvent) => {
-      console.log('[Main] Received message from worker:', event.data);
+    const messageHandler = (event: MessageEvent) => {
       const msg: ProtocolMsg = event.data;
       if (msg && typeof msg === 'object' && 'type' in msg) {
-        console.log(`[Main] Valid message with type: ${msg.type}`);
         // Messages can have either 'id' (stream messages) or 'requestId' (id-request/id-response)
         this.route(msg);
-      } else {
-        console.warn('[Main] Invalid message format:', msg);
       }
     };
+
+    // Try setting onmessage first, fall back to addEventListener if it fails
+    try {
+      this.worker.onmessage = messageHandler;
+    } catch (error) {
+      this.worker.addEventListener('message', messageHandler);
+    }
   }
 
   private setupHandlers(): void {
@@ -51,7 +54,6 @@ class MainThreadRouter extends MessageRouter {
   }
 
   private handleIdResponseMessage(msg: IdResponseMsg): void {
-    console.log('[Main] MainThreadRouter: Received ID response:', msg);
     this.handleIdResponse(msg.requestId, msg.streamId);
   }
 
@@ -72,10 +74,8 @@ class MainThreadRouter extends MessageRouter {
   }
 
   private handleStreamReject(msg: StreamRejectMsg): void {
-    console.log('[Main] Handling stream rejection for ID:', msg.id, 'reason:', msg.reason);
     const streamInfo = this.getStream(msg.id);
     if (streamInfo) {
-      console.log('[Main] Found stream info, updating state and rejecting');
       this.updateState(msg.id, StreamState.Rejected);
       // Clear timeout if set
       if ((streamInfo as any).timeoutId) {
@@ -84,13 +84,8 @@ class MainThreadRouter extends MessageRouter {
       }
       // Reject pending promise stored in streamInfo
       if ((streamInfo as any).rejectAccept) {
-        console.log('[Main] Calling rejectAccept with error:', msg.reason);
         (streamInfo as any).rejectAccept(new Error(msg.reason || 'Stream rejected'));
-      } else {
-        console.log('[Main] No rejectAccept function found on stream info');
       }
-    } else {
-      console.log('[Main] No stream info found for ID:', msg.id);
     }
   }
 
@@ -118,7 +113,6 @@ class MainThreadRouter extends MessageRouter {
       try {
         controller.enqueue(msg.chunk);
       } catch (error) {
-        console.error('Error enqueueing chunk:', error);
         this.closeStream(msg.id);
       }
     }
@@ -165,12 +159,10 @@ class MainThreadRouter extends MessageRouter {
   }
 
   protected sendIdRequest(requestId: number): void {
-    console.log('[Main] MainThreadRouter: Sending ID request with requestId:', requestId);
     this.worker.postMessage({
       type: 'id-request',
       requestId
     });
-    console.log('[Main] ID request sent to worker');
   }
 
   sendMessage(msg: ProtocolMsg): void {
@@ -194,11 +186,8 @@ class MainThreadRouter extends MessageRouter {
 
   // Request a new stream from worker
   async requestStream(name: string, options?: BridgeOptions<unknown>): Promise<StreamId> {
-    console.log('MainThreadRouter: Requesting stream ID from worker');
-    
     // First, request a stream ID from the worker
     const id = await this.requestStreamId();
-    console.log('MainThreadRouter: Received stream ID from worker:', id);
     
     const streamInfo = this.registerStream(id, name);
     
@@ -222,8 +211,6 @@ class MainThreadRouter extends MessageRouter {
       }
     });
 
-    console.log('MainThreadRouter: Sending stream request for name:', name, 'with id:', id);
-    
     // Send stream request using the worker-generated ID
     this.sendMessage({
       id,
@@ -268,9 +255,7 @@ export function bridge<T, U = unknown>(
       async start(controller) {
         try {
           // Request stream using shared router
-          console.log('[Main] Bridge start: requesting stream for name:', name);
           streamId = await router.requestStream(name, options);
-          console.log('[Main] Bridge start: received stream ID:', streamId);
           
           const streamInfo = router.getStream(streamId);
           if (!streamInfo) {
@@ -341,7 +326,6 @@ export function bridge<T, U = unknown>(
           }
           
         } catch (error) {
-          console.log('[Main] Bridge start error:', error);
           controller.error(error);
         }
       },

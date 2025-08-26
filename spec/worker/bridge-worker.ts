@@ -1,6 +1,9 @@
 // TypeScript version of bridge worker that will be bundled
 import { onStream } from '../../src/workers/index.js';
 
+// Simple debug to verify worker context
+console.log('Bridge worker starting...');
+
 // Handler for 'double' stream type
 function handleDoubleStream(accept: () => { readable: ReadableStream; writable: WritableStream }) {
   // Accept and create transform pipeline

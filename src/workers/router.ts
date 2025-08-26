@@ -77,46 +77,35 @@ export class MessageRouter {
 
   // Route incoming message to appropriate handler
   route(msg: ProtocolMsg): void {
-    console.log(`[Router] Routing message type: ${msg.type}`, msg);
     const handler = this.handlers.get(msg.type);
     if (handler) {
       try {
-        console.log(`[Router] Found handler for ${msg.type}, executing...`);
         handler(msg);
       } catch (error) {
-        console.error(`Error handling ${msg.type} message:`, error);
         // Send error response if possible (only for messages with stream IDs)
         if ('id' in msg) {
           this.sendError(msg.id, error);
         }
       }
-    } else {
-      console.warn(`No handler for message type: ${msg.type}`, 'Available handlers:', Array.from(this.handlers.keys()));
     }
   }
 
   // Request a stream ID from the worker (main thread only)
   async requestStreamId(): Promise<StreamId> {
     const requestId = this.generateRequestId();
-    console.log(`[Router] Requesting stream ID with requestId: ${requestId}`);
     
     return new Promise<StreamId>((resolve) => {
       this.pendingIdRequests.set(requestId, resolve);
-      console.log(`[Router] Added pending request ${requestId}, sending ID request...`);
       this.sendIdRequest(requestId);
     });
   }
 
   // Handle ID response (main thread only)
   handleIdResponse(requestId: number, streamId: StreamId): void {
-    console.log(`[Router] Handling ID response: requestId=${requestId}, streamId=${streamId}`);
     const resolver = this.pendingIdRequests.get(requestId);
     if (resolver) {
-      console.log(`[Router] Found pending request ${requestId}, resolving with streamId ${streamId}`);
       this.pendingIdRequests.delete(requestId);
       resolver(streamId);
-    } else {
-      console.warn(`[Router] No pending request found for requestId: ${requestId}`);
     }
   }
 

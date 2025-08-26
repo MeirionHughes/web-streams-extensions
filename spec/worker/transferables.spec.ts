@@ -6,9 +6,31 @@ import { bridge } from '../../src/operators/bridge.js';
 import { validateTransferableValue, defaultGetTransferables } from '../../src/workers/transferables.js';
 
 // Only create worker if Worker is available (browser environment)
-const worker = typeof Worker !== 'undefined' ? new Worker('./spec/worker/bridge-worker.bundle.js') : null;
 
 describe('Transferables and Value Validation', () => {
+  let worker: Worker | undefined;
+  
+  // If Worker isn't available in this environment, skip the whole suite
+  before(function () {
+    if (typeof Worker === 'undefined') {
+      // Use mocha's this.skip to skip the entire suite
+      // (cannot use arrow functions with Mocha's `this`)
+      this.skip();
+    }
+  });
+
+  beforeEach(function() {
+    // Create a fresh worker for each test using the bundled worker file
+    worker = new Worker(new URL('./bridge-worker.bundle.js', import.meta.url));
+  });
+
+  afterEach(function() {
+    // Clean up worker to prevent hanging
+    if (worker) {
+      worker.terminate();
+      worker = undefined;
+    }
+  });
   describe('validateTransferableValue', () => {
     it('should allow primitive values', () => {
       expect(() => validateTransferableValue(42)).to.not.throw();
@@ -175,6 +197,8 @@ describe('Transferables and Value Validation', () => {
     });
     
     it('should transfer typed arrays efficiently', async () => {
+      if (!worker) return; // Extra safety check
+      
       const source = of(new Uint8Array([1, 2, 3, 4]));
 
       const stream = pipe(
@@ -194,6 +218,8 @@ describe('Transferables and Value Validation', () => {
     });
 
     it('should handle mixed transferable and non-transferable data', async () => {
+      if (!worker) return; // Extra safety check
+      
       const originalBuffer = new ArrayBuffer(4); // Match the data size
       const typedArray = new Uint8Array(originalBuffer);
       typedArray.set([5, 10, 15, 20]); // Exactly 4 bytes
@@ -228,6 +254,8 @@ describe('Transferables and Value Validation', () => {
     });
 
     it('should reject invalid values', async () => {
+      if (!worker) return; // Extra safety check
+      
       class InvalidClass {
         constructor(public value: number) { }
       }
@@ -248,6 +276,8 @@ describe('Transferables and Value Validation', () => {
     });
 
     it('should handle custom getTransferables function', async () => {
+      if (!worker) return; // Extra safety check
+      
       let capturedValue: any = null;
       let getTransferablesCalled = false;
 
@@ -283,6 +313,8 @@ describe('Transferables and Value Validation', () => {
     });
 
     it('should use structured clone for TypedArrays (no buffer transfer)', async () => {
+      if (!worker) return; // Extra safety check
+      
       let transferablesCalled = false;
       let detectedTransferables: Transferable[] = [];
 

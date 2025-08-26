@@ -6,18 +6,19 @@ import { range } from '../../src/range.js';
 import { toArray } from '../../src/to-array.js';
 import { map } from '../../src/operators/map.js';
 
-describe('bridge operator (browser)', () => {
+describe('bridge operator (browser)', function () {
   let worker: Worker;
 
-  beforeEach(function() {
-    // Skip if Worker is not available (Node.js environment)
+  // If Worker isn't available in this environment, skip the whole suite
+  before(function () {
     if (typeof Worker === 'undefined') {
       this.skip();
-      return;
     }
-    
+  });
+
+  beforeEach(function () {
     // Create a fresh worker for each test using the bundled worker file
-    worker = new Worker('./spec/worker/bridge-worker.bundle.js');
+    worker = new Worker(new URL('./bridge-worker.bundle.js', import.meta.url));
   });
 
   afterEach(() => {

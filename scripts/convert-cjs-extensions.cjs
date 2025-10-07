@@ -1,6 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 
+let stats = {
+  filesRenamed: 0,
+  importsUpdated: 0,
+  errors: []
+};
+
 function renameJsToCjs(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   
@@ -14,7 +20,7 @@ function renameJsToCjs(dir) {
       // Rename .js files to .cjs
       const newPath = fullPath.replace(/\.js$/, '.cjs');
       fs.renameSync(fullPath, newPath);
-      console.log(`Renamed: ${fullPath} -> ${newPath}`);
+      stats.filesRenamed++;
       
       // Update imports in the renamed file to use .cjs extensions
       updateImportsInFile(newPath);
@@ -33,9 +39,9 @@ function updateImportsInFile(filePath) {
     content = content.replace(/require\(["'](\.\/.+?)\.js["']\)/g, 'require("$1.cjs")');
     
     fs.writeFileSync(filePath, content, 'utf8');
-    console.log(`Updated imports in: ${filePath}`);
+    stats.importsUpdated++;
   } catch (error) {
-    console.error(`Error updating imports in ${filePath}:`, error.message);
+    stats.errors.push(`${filePath}: ${error.message}`);
   }
 }
 
@@ -43,9 +49,16 @@ function updateImportsInFile(filePath) {
 const cjsDir = path.join(__dirname, '..', 'dist', 'cjs');
 
 if (fs.existsSync(cjsDir)) {
-  console.log('Converting CommonJS .js files to .cjs...');
   renameJsToCjs(cjsDir);
-  console.log('CommonJS file conversion complete!');
+  
+  // Print summary
+  console.log('CommonJS Conversion Summary:');
+  console.log(`  Files renamed: ${stats.filesRenamed}`);
+  console.log(`  Imports updated: ${stats.importsUpdated}`);
+  if (stats.errors.length > 0) {
+    console.log(`  Errors: ${stats.errors.length}`);
+    stats.errors.forEach(err => console.error(`    - ${err}`));
+  }
 } else {
   console.error('CJS build directory not found:', cjsDir);
   process.exit(1);

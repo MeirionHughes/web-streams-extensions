@@ -67,112 +67,6 @@ const result = await toArray(
 // Result: [2, 4, 6, 8, 10]
 ```
 
-### CPU-Intensive Processing
-
-**Worker (heavy-math.js):**
-```typescript
-import { onStream } from 'web-streams-extensions/workers';
-
-onStream(({ name, accept, reject }) => {
-  if (name !== "fibonacci") {
-    reject("Unknown operation");
-    return;
-  }
-
-  const { readable, writable } = accept();
-  
-  readable
-    .pipeThrough(new TransformStream({
-      transform(n, controller) {
-        // CPU-intensive Fibonacci calculation
-        function fib(x) {
-          if (x <= 1) return x;
-          return fib(x - 1) + fib(x - 2);
-        }
-        controller.enqueue({ input: n, result: fib(n) });
-      }
-    }))
-    .pipeTo(writable);
-});
-```
-
-```typescript
-const worker = new Worker('./heavy-math.js');
-
-const result = await toArray(
-  pipe(
-    from([30, 35, 40]),
-    bridge(worker, 'fibonacci')
-  )
-);
-// Input:  30---35---40---|
-// Output: {input:30,result:832040}---{input:35,result:9227465}---{input:40,result:102334155}---|
-// Result: [{ input: 30, result: 832040 }, ...]
-```
-
-### Image Processing with Transferables
-
-**Worker (image-worker.js):**
-```typescript
-import { onStream } from 'web-streams-extensions/workers';
-
-onStream(({ name, accept, reject }) => {
-  if (name !== "grayscale") {
-    reject("Unknown filter");
-    return;
-  }
-
-  const { readable, writable } = accept();
-  
-  readable
-    .pipeThrough(new TransformStream({
-      transform(imageData, controller) {
-        const data = imageData.data;
-        for (let i = 0; i < data.length; i += 4) {
-          const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-          data[i] = data[i + 1] = data[i + 2] = avg;
-        }
-        controller.enqueue(imageData);
-      }
-    }))
-    .pipeTo(writable);
-});
-```
-
-```typescript
-const worker = new Worker('./image-worker.js');
-
-const result = await toArray(
-  pipe(
-    from(imageDataArray),
-    bridge(worker, 'grayscale', {
-      getTransferables: (imageData) => [imageData.data.buffer]
-    })
-  )
-);
-// Efficiently transfers ImageData using ArrayBuffer transferables
-```
-
-### Error Handling and Timeouts
-
-```typescript
-const worker = new Worker('./unreliable-worker.js');
-
-try {
-  const result = await toArray(
-    pipe(
-      from([1, 2, 3]),
-      bridge(worker, 'process', {
-        timeoutMs: 5000, // 5 second timeout
-        signal: abortController.signal
-      })
-    )
-  );
-} catch (error) {
-  console.error('Worker processing failed:', error.message);
-  // Could be timeout, worker rejection, or processing error
-}
-```
 
 ### Multiple Stream Types
 
@@ -181,10 +75,9 @@ try {
 import { onStream } from 'web-streams-extensions/workers';
 
 onStream(({ name, accept, reject }) => {
-  const { readable, writable } = accept();
-  
   switch (name) {
-    case 'uppercase':
+    case 'uppercase': {
+      const { readable, writable } = accept();
       readable
         .pipeThrough(new TransformStream({
           transform(chunk, controller) {
@@ -193,8 +86,10 @@ onStream(({ name, accept, reject }) => {
         }))
         .pipeTo(writable);
       break;
+    }
       
-    case 'square':
+    case 'square': {
+      const { readable, writable } = accept();
       readable
         .pipeThrough(new TransformStream({
           transform(chunk, controller) {
@@ -203,8 +98,10 @@ onStream(({ name, accept, reject }) => {
         }))
         .pipeTo(writable);
       break;
+    }
       
     default:
+      // reject() instead of accept() for unknown streams
       reject(`Unknown operation: ${name}`);
   }
 });
@@ -250,6 +147,6 @@ The bridge operator uses a robust message-passing protocol with automatic:
 
 ## See Also
 
-- **[Workers Documentation](../workers.md)** - Complete guide to worker stream processing
+- [Workers Documentation](../workers.md) - Complete guide to worker stream processing
 - [`buffer`](./buffer.md) - Buffer values to reduce message overhead
 - [`debounceTime`](./debounceTime.md) - Reduce frequency for worker processing

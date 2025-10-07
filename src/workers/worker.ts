@@ -51,10 +51,18 @@ class WorkerMessageRouter extends MessageRouter {
     const streamInfo = this.registerStream(msg.id, msg.name);
     this.updateState(msg.id, StreamState.Requested);
 
+    // Track whether accept() or reject() has been called
+    let responded = false;
+
     // Create stream request object
     const request: StreamRequest = {
       name: msg.name,
-      accept: () => {
+      accept: (options) => {
+        if (responded) {
+          throw new Error('Cannot call accept() after stream has been accepted or rejected');
+        }
+        responded = true;
+        
         this.updateState(msg.id, StreamState.Accepted);
         
         // Send accept message
@@ -63,13 +71,17 @@ class WorkerMessageRouter extends MessageRouter {
           type: 'stream-accept'
         });
 
-        // Create worker streams
+        // Use stream-specific getTransferables if provided, otherwise use global
+        const streamGetTransferables = options?.getTransferables || 
+          ((value: any) => this.getTransferables(value));
+
+        // Create worker streams with the stream-specific getTransferables
         const readableWrapper = new WorkerReadableStream(msg.id, (msg) => {
           this.postMessage(msg, msg.transferList);
         });
         const writableWrapper = new WorkerWritableStream(msg.id, (msg) => {
           this.postMessage(msg, msg.transferList);
-        }, (value) => this.getTransferables(value));
+        }, streamGetTransferables);
 
         // Store stream wrappers for data routing
         (streamInfo as any).readableWrapper = readableWrapper;
@@ -83,10 +95,15 @@ class WorkerMessageRouter extends MessageRouter {
         
         return {
           readable: readableWrapper.createStream(),
-          writable: writableWrapper.createStream()
+          writable: writableWrapper.createStream(),
         };
       },
       reject: (reason?: any) => {
+        if (responded) {
+          throw new Error('Cannot call reject() after stream has been accepted or rejected');
+        }
+        responded = true;
+        
         this.updateState(msg.id, StreamState.Rejected);
         
         // Send reject message

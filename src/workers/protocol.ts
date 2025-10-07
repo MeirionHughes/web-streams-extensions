@@ -109,9 +109,20 @@ export enum StreamState {
 }
 
 // Stream request handler types
+export interface AcceptOptions {
+  getTransferables?: GetTransferablesFn;
+}
+
+export interface StreamRequestAcceptFunction {
+  (options?: AcceptOptions): { 
+    readable: ReadableStream<any>; 
+    writable: WritableStream<any>;
+  };
+}
+
 export interface StreamRequest {
   name: string;
-  accept(): { readable: ReadableStream<any>; writable: WritableStream<any> };
+  accept: StreamRequestAcceptFunction
   reject(reason?: any): void;
 }
 

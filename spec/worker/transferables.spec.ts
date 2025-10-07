@@ -161,20 +161,6 @@ describe('Transferables and Value Validation', () => {
       expect(() => defaultGetTransferables(obj)).to.not.throw();
     });
 
-    it('should not extract buffers from TypedArrays (structured clone handles them)', () => {
-      const buffer = new ArrayBuffer(8);
-      const typedArray1 = new Uint8Array(buffer);
-      const typedArray2 = new Uint16Array(buffer);
-
-      const data = {
-        array1: typedArray1,
-        array2: typedArray2
-      };
-
-      const transferables = defaultGetTransferables(data);
-      expect(transferables).to.deep.equal([]); // No buffers extracted from TypedArrays
-    });
-
     it('should return empty array for non-transferable data', () => {
       const data = {
         string: 'hello',
@@ -310,48 +296,6 @@ describe('Transferables and Value Validation', () => {
       expect(getTransferablesCalled).to.be.true;
       expect(capturedValue).to.be.instanceOf(Uint8Array);
       expect(Array.from(capturedValue)).to.deep.equal([1, 2, 3, 4]);
-    });
-
-    it('should use structured clone for TypedArrays (no buffer transfer)', async () => {
-      if (!worker) return; // Extra safety check
-      
-      let transferablesCalled = false;
-      let detectedTransferables: Transferable[] = [];
-
-      // Custom function that captures what transferables were detected
-      const capturingGetTransferables = (value: any) => {
-        transferablesCalled = true;
-        const transferables = defaultGetTransferables(value);
-        detectedTransferables = transferables;
-        return transferables;
-      };
-
-      const originalBuffer = new ArrayBuffer(8); // Match the data size
-      const typedArray = new Uint8Array(originalBuffer);
-      typedArray.set([1, 2, 3, 4, 5, 6, 7, 8]); // Exactly 8 bytes
-
-      const source = of(typedArray);
-
-      const stream = pipe(
-        source,
-        bridge(worker, 'passthrough', {
-          validate(value) {
-            return value instanceof Uint8Array
-          },
-          getTransferables: capturingGetTransferables
-        })
-      );
-
-      const result = await toArray(stream);
-
-      expect(result).to.have.length(1);
-      expect(result[0]).to.be.instanceOf(Uint8Array);
-      expect(Array.from(result[0])).to.deep.equal([1, 2, 3, 4, 5, 6, 7, 8]);
-
-      // Verify transferables were detected but NO buffers were transferred
-      // (structured clone handles TypedArrays efficiently)
-      expect(transferablesCalled).to.be.true;
-      expect(detectedTransferables).to.have.length(0); // No transferables for TypedArrays
     });
   });
 });

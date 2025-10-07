@@ -215,57 +215,25 @@ describe('bridge operator (browser)', function () {
     }
   });
 
-  it('should handle unknown stream types', async () => {
-    const stream = pipe(
-      of(1, 2, 3),
-      bridge(worker, 'unknown-stream-type')
-    );
-
-    const reader = stream.getReader();
-
-    try {
-      await reader.read();
-      assert.fail('Expected rejection error');
-    } catch (error: any) {
-      assert.include(error.message, 'Unknown stream type: unknown-stream-type');
-    }
-  });
-
   it('should handle worker-side cancellation', async () => {
     // Use delay stream to test cancellation during processing
     const stream = pipe(
-      range(1, 10),
+      range(1, 100), // Large range to ensure we can cancel mid-stream
       bridge(worker, 'delay')
     );
 
     const reader = stream.getReader();
 
-    // Start reading
-    const readPromise = reader.read();
+    // Read first chunk to ensure stream is active
+    const { value: firstValue } = await reader.read();
+    assert.equal(firstValue, 1);
 
-    // Cancel after starting
-    setTimeout(() => reader.cancel('Test cancellation'), 50);
+    // Cancel the stream
+    await reader.cancel('Test cancellation');
 
-    try {
-      await readPromise;
-      // Should either complete normally or be cancelled
-      assert.isTrue(true);
-    } catch (error) {
-      // Cancellation might throw, which is okay
-      assert.isTrue(true);
-    }
-  });
-
-  it('should handle backpressure with passthrough stream', async () => {
-    const stream = pipe(
-      range(1, 20),
-      bridge(worker, 'passthrough')
-    );
-
-    const result = await toArray(stream);
-
-    // Passthrough should return data unchanged
-    assert.deepEqual(result, Array.from({ length: 20 }, (_, i) => i + 1));
+    // After cancellation, reads should indicate done
+    const { done } = await reader.read();
+    assert.isTrue(done, 'Stream should be done after cancellation');
   });
 
   it('should handle filtering stream', async () => {

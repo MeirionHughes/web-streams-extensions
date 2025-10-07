@@ -36,6 +36,7 @@
     "test": "mocha \"./spec/**/*.spec.ts\" --ignore=\"./spec/worker/**\"",
     "test:cover": "c8 --reporter=lcov --reporter=text --exclude=spec/** --exclude=**/*.spec.ts mocha ./spec/**/*.spec.ts",
     "test:node": "node --import tsx/esm --import ./scripts/test-setup.js --test ./spec/**/*.spec.ts",
+    "test:node:grep": "node --import tsx/esm --import ./scripts/test-setup.js --test-name-pattern",
     "test:node:cover": "node scripts/test-node-coverage.js",
     "test:browser": "node scripts/test-browser.js",
     "test:browser:chromium": "node scripts/test-browser-chromium.js",

@@ -1,11 +1,9 @@
 // TypeScript version of bridge worker that will be bundled
 import { onStream } from '../../src/workers/index.js';
-
-// Simple debug to verify worker context
-console.log('Bridge worker starting...');
+import { StreamRequestAcceptFunction } from '../../src/workers/protocol.js';
 
 // Handler for 'double' stream type
-function handleDoubleStream(accept: () => { readable: ReadableStream; writable: WritableStream }) {
+function handleDoubleStream(accept: StreamRequestAcceptFunction) {
   // Accept and create transform pipeline
   const { readable, writable } = accept();
   
@@ -17,12 +15,14 @@ function handleDoubleStream(accept: () => { readable: ReadableStream; writable: 
       } else if (Array.isArray(chunk) && chunk.every(v => typeof v === 'number')) {
         controller.enqueue(chunk.map(v => v * 2));
       } else if (ArrayBuffer.isView(chunk)) {
-        // Handle typed arrays
+        // Handle typed arrays - create new buffer for transfer efficiency
         const typedChunk = chunk as Uint8Array; // Cast to a specific typed array
-        const result = new (typedChunk.constructor as any)(typedChunk.length);
+        const buffer = new ArrayBuffer(typedChunk.length * typedChunk.BYTES_PER_ELEMENT);
+        const result = new (typedChunk.constructor as any)(buffer);
         for (let i = 0; i < typedChunk.length; i++) {
           (result as any)[i] = typedChunk[i] * 2;
         }
+        // The buffer will be detected as transferable by getTransferables
         controller.enqueue(result);
       } else {
         // Pass through with transformation indicator
@@ -36,7 +36,7 @@ function handleDoubleStream(accept: () => { readable: ReadableStream; writable: 
 }
 
 // Handler for 'passthrough' stream type - just passes data through unchanged
-function handlePassthroughStream(accept: () => { readable: ReadableStream; writable: WritableStream }) {
+function handlePassthroughStream(accept: StreamRequestAcceptFunction) {
   const { readable, writable } = accept();
   
   // Simple passthrough - no transformation
@@ -44,7 +44,7 @@ function handlePassthroughStream(accept: () => { readable: ReadableStream; writa
 }
 
 // Handler for 'delay' stream type - adds artificial delay to test async behavior
-function handleDelayStream(accept: () => { readable: ReadableStream; writable: WritableStream }) {
+function handleDelayStream(accept: StreamRequestAcceptFunction) {
   const { readable, writable } = accept();
   
   const transform = new TransformStream({
@@ -59,7 +59,7 @@ function handleDelayStream(accept: () => { readable: ReadableStream; writable: W
 }
 
 // Handler for 'error' stream type - throws an error to test error handling
-function handleErrorStream(accept: () => { readable: ReadableStream; writable: WritableStream }) {
+function handleErrorStream(accept: StreamRequestAcceptFunction) {
   const { readable, writable } = accept();
   
   const transform = new TransformStream({
@@ -75,12 +75,12 @@ function handleErrorStream(accept: () => { readable: ReadableStream; writable: W
 }
 
 // Handler for 'immediate-error' stream type - rejects immediately to test reject handling
-function handleImmediateErrorStream(accept: () => { readable: ReadableStream; writable: WritableStream }, reject: (reason: string) => void) {
+function handleImmediateErrorStream(accept: StreamRequestAcceptFunction, reject: (reason: string) => void) {
   reject('Immediate error from worker');
 }
 
 // Handler for 'filter-even' stream type - filters to only even numbers
-function handleFilterEvenStream(accept: () => { readable: ReadableStream; writable: WritableStream }) {
+function handleFilterEvenStream(accept: StreamRequestAcceptFunction) {
   const { readable, writable } = accept();
   
   const transform = new TransformStream({
@@ -95,45 +95,102 @@ function handleFilterEvenStream(accept: () => { readable: ReadableStream; writab
   readable.pipeThrough(transform).pipeTo(writable);
 }
 
+// Handler for 'transfer-error' stream type
+// Tests per-stream transferables functionality:
+// 1. Registers a per-stream getTransferables function that transfers Uint8Array buffers
+// 2. Creates a Uint8Array and sends it to main thread
+// 3. Verifies the buffer was transferred by checking if it's detached
+function handleTransferErrorStream(accept: StreamRequestAcceptFunction) {
+  // Register per-stream getTransferables that will transfer Uint8Array buffers
+  const { readable, writable } = accept({
+    getTransferables: (value: any) => {
+      if (value instanceof Uint8Array || ArrayBuffer.isView(value)) {
+        return [(value as any).buffer];
+      }
+      return [];
+    }
+  });
+  
+  let workerArray: Uint8Array;
+  let checkPromise: Promise<void>;
+  
+  const transform = new TransformStream({
+    async transform(chunk, controller) {
+      // Create a Uint8Array in the worker
+      workerArray = new Uint8Array([10, 20, 30, 40]);
+      
+      // Send it to main thread - the per-stream getTransferables will transfer the buffer
+      controller.enqueue(workerArray);
+      
+      // Check after a delay to ensure the transfer has completed
+      checkPromise = new Promise((resolve) => setTimeout(resolve, 50)).then(() => {
+        // If the buffer was transferred, it should be detached (byteLength === 0)
+        if (workerArray.buffer.byteLength === 0) {
+          throw new Error('ArrayBuffer was transferred to main thread - worker buffer is now detached');
+        } else {
+          throw new Error(`ArrayBuffer was NOT transferred - worker can still access buffer (byteLength: ${workerArray.buffer.byteLength})`);
+        }
+      });
+    },
+    
+    async flush(controller) {
+      if (checkPromise) {
+        try {
+          await checkPromise;
+        } catch (err) {
+          controller.error(err);
+          throw err;
+        }
+      }
+    }
+  });
+  
+  readable.pipeThrough(transform).pipeTo(writable);
+}
+
 // Register stream handler
 onStream(({ name, accept, reject }) => {
-  console.log('Worker: Received stream request for:', name);
-  
   switch (name) {
     case 'double':
       handleDoubleStream(accept);
       break;
-      
     case 'passthrough':
       handlePassthroughStream(accept);
       break;
-      
     case 'delay':
       handleDelayStream(accept);
       break;
-      
     case 'error':
       handleErrorStream(accept);
       break;
-    
     case 'immediate-error':
       handleImmediateErrorStream(accept, reject);
       break;
-      
     case 'filter-even':
       handleFilterEvenStream(accept);
       break;
-      
+    case 'transfer-error':
+      handleTransferErrorStream(accept);
+      break;
     case 'no-response':
       // Intentionally don't call accept() or reject() to test timeout
-      console.log('Worker: Received no-response request, not responding');
       break;
-      
     default:
       // Reject unknown stream types
       reject(`Unknown stream type: ${name}`);
       break;
   }
+}, (value: any) => {
+  // Global getTransferables function for the worker
+  // Transfer buffers from TypedArrays and ArrayBuffers
+  if (value instanceof Uint8Array || ArrayBuffer.isView(value)) {
+    return [(value as any).buffer];
+  }
+  
+  if (value instanceof ArrayBuffer) {
+    return [value];
+  }
+  
+  // No transferables for other types
+  return [];
 });
-
-console.log('Bridge worker ready with onStream handler');

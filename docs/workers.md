@@ -10,6 +10,8 @@ The worker utilities allow you to offload stream processing to Web Workers, enab
 - CPU-intensive operations without UI blocking
 - Proper handling of transferable objects for performance
 
+This document covers the worker-side API (`onStream`). For main thread usage and the `bridge` operator, see **[bridge operator documentation](./operators/bridge.md)**.
+
 ## Setup
 
 ### In the Worker
@@ -61,43 +63,9 @@ const processedStream = pipe(
 );
 ```
 
+For complete `bridge` operator details, options, and examples, see **[bridge operator documentation](./operators/bridge.md)**.
+
 ## API Reference
-
-### `bridge(worker, name, options?)`
-
-Creates a bridge operator that processes streams in a Web Worker. Used in the main thread as a pipe operator.
-
-#### Parameters
-
-- `worker: Worker` - The Web Worker instance running the `onStream` handler
-- `name: string` - Stream type name for worker routing
-- `options?: BridgeOptions` - Configuration options
-
-#### BridgeOptions
-
-```typescript
-interface BridgeOptions<U = unknown> {
-  signal?: AbortSignal;           // For cancellation
-  timeoutMs?: number;             // Timeout for stream setup
-  getTransferables?: GetTransferablesFn; // Custom transferable extraction
-  validate?(value: unknown): value is U; // Runtime type validation
-}
-```
-
-#### Example
-
-```typescript
-import { bridge } from 'web-streams-extensions';
-import { pipe } from 'web-streams-extensions';
-
-const processedStream = pipe(
-  inputStream,
-  bridge(worker, 'double', {
-    timeoutMs: 5000,
-    signal: abortController.signal
-  })
-);
-```
 
 ### `onStream(handler, getTransferables?)`
 
@@ -106,7 +74,7 @@ Register a stream handler in a Worker context.
 #### Parameters
 
 - `handler: StreamHandler` - Function that processes incoming stream requests
-- `getTransferables?: GetTransferablesFn` - Optional function to extract transferable objects
+- `getTransferables?: GetTransferablesFn` - Optional Worker-wide function to extract transferable objects
 
 #### StreamHandler Type
 
@@ -115,26 +83,38 @@ type StreamHandler = (request: StreamRequest) => void;
 
 interface StreamRequest {
   name: string;
-  accept(): { readable: ReadableStream; writable: WritableStream };
+  accept(options?: AcceptOptions): { readable: ReadableStream; writable: WritableStream };
   reject(reason?: any): void;
+}
+
+interface AcceptOptions {
+  getTransferables?: GetTransferablesFn; // Per-stream transferable extraction
 }
 ```
 
-#### Example: Image Processing Worker
+**Important:** `accept()` and `reject()` are mutually exclusive - you must call one or the other, but never both. Calling `accept()` establishes the bidirectional stream connection. Attempting to call `reject()` after `accept()` (or vice versa) will throw an error.
+
+#### Example: Per-Stream Transferables
 
 ```typescript
-// image-worker.js
 import { onStream } from 'web-streams-extensions/workers';
 
 onStream(({ name, accept, reject }) => {
-  if (name === 'process-image') {
-    const { readable, writable } = accept();
+  if (name === 'process-buffers') {
+    // Register per-stream getTransferables to transfer Uint8Array buffers
+    const { readable, writable } = accept({
+      getTransferables: (value) => {
+        if (value instanceof Uint8Array) {
+          return [value.buffer];
+        }
+        return [];
+      }
+    });
     
     readable
       .pipeThrough(new TransformStream({
-        async transform(imageData, controller) {
-          // CPU-intensive image processing
-          const processed = await processImage(imageData);
+        transform(data, controller) {
+          const processed = processBuffer(data);
           controller.enqueue(processed);
         }
       }))
@@ -142,12 +122,6 @@ onStream(({ name, accept, reject }) => {
   } else {
     reject(`Unknown stream type: ${name}`);
   }
-}, (value) => {
-  // Extract ImageData transferables for performance
-  if (value instanceof ImageData) {
-    return [value.data.buffer];
-  }
-  return [];
 });
 ```
 
@@ -198,92 +172,65 @@ onStream(({ name, accept, reject }) => {
 });
 ```
 
-## Use Cases
+## Practical Examples
 
-### CPU-Intensive Processing
+### Multiple Stream Types in One Worker
 
 ```typescript
-// worker.js - Mathematical computations
+// worker.js
+import { onStream } from 'web-streams-extensions/workers';
+
 onStream(({ name, accept, reject }) => {
-  if (name === 'compute') {
-    const { readable, writable } = accept();
-    
-    readable
-      .pipeThrough(new TransformStream({
-        transform(data, controller) {
-          const result = performComplexCalculation(data);
-          controller.enqueue(result);
-        }
-      }))
-      .pipeTo(writable);
-  } else {
-    reject(`Unknown stream type: ${name}`);
-  }
-});
-```
-
-### Parallel Stream Processing
-
-```typescript
-// main.js - Process multiple streams in parallel
-import { bridge } from 'web-streams-extensions';
-import { pipe } from 'web-streams-extensions';
-
-const workers = Array.from({ length: 4 }, () => 
-  new Worker('./processor.js', { type: 'module' })
-);
-
-const processedStreams = inputStreams.map((stream, index) => 
-  pipe(
-    stream,
-    bridge(workers[index % workers.length], 'process')
-  )
-);
-```
-
-### Real-time Data Processing
-
-```typescript
-// worker.js - Audio/video processing
-onStream(({ name, accept, reject }) => {
-  if (name === 'audio-filter') {
-    const { readable, writable } = accept();
-    
-    readable
-      .pipeThrough(new TransformStream({
-        transform(audioChunk, controller) {
-          const filtered = applyAudioFilter(audioChunk);
-          controller.enqueue(filtered);
-        }
-      }))
-      .pipeTo(writable);
-  } else {
-    reject(`Unknown stream type: ${name}`);
+  const { readable, writable } = accept();
+  
+  switch (name) {
+    case 'double':
+      readable
+        .pipeThrough(new TransformStream({
+          transform(chunk, controller) {
+            controller.enqueue(chunk * 2);
+          }
+        }))
+        .pipeTo(writable);
+      break;
+      
+    case 'uppercase':
+      readable
+        .pipeThrough(new TransformStream({
+          transform(chunk, controller) {
+            controller.enqueue(chunk.toUpperCase());
+          }
+        }))
+        .pipeTo(writable);
+      break;
+      
+    default:
+      reject(`Unknown stream type: ${name}`);
   }
 });
 ```
 
 ## Error Handling
 
-Workers automatically handle errors and propagate them to the main thread:
+Errors thrown in worker transforms are automatically propagated to the main thread:
 
 ```typescript
 onStream(({ name, accept, reject }) => {
-  if (name === 'validate-data') {
+  if (name === 'validate') {
     const { readable, writable } = accept();
     
     readable
       .pipeThrough(new TransformStream({
         transform(data, controller) {
           if (!isValid(data)) {
-            throw new Error('Invalid data format');
+            throw new Error('Invalid data format'); // Propagates to main thread
           }
           controller.enqueue(processData(data));
         }
       }))
       .pipeTo(writable);
   } else {
-    reject(`Unknown stream type: ${name}`);
+    reject(`Unknown stream type: ${name}`); // Also propagates to main thread
   }
 });
 ```
@@ -291,10 +238,17 @@ onStream(({ name, accept, reject }) => {
 ## Best Practices
 
 1. **Keep Workers Stateless**: Design workers to be stateless for better reliability
-2. **Use Transferables**: For large objects, always specify transferable objects
-3. **Handle Errors**: Implement proper error handling in worker stream handlers
-4. **Resource Cleanup**: Workers are automatically cleaned up when streams complete
-5. **Batch Processing**: Use buffering operators for efficient batch processing
+2. **Use Transferables**: For large objects (ArrayBuffers, ImageBitmaps), specify transferables to avoid copying
+3. **Per-Stream Transferables**: Use `accept({ getTransferables })` for stream-specific transfer behavior
+4. **Handle Errors**: Errors automatically propagate to main thread - implement validation in transforms
+5. **Worker Reuse**: A single worker can handle multiple concurrent streams efficiently
+6. **Batch Processing**: Use buffering operators to reduce message passing overhead
+
+## See Also
+
+- **[bridge operator](./operators/bridge.md)** - Main thread API, options, and detailed examples
+- **[buffer operator](./operators/buffer.md)** - Batch values to reduce message overhead
+- **[debounceTime operator](./operators/debounceTime.md)** - Reduce frequency for worker processing
 
 ## Browser Support
 

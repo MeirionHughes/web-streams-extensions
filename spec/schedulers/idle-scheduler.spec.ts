@@ -215,26 +215,34 @@ describe('IdleScheduler', () => {
 
   describe('performance characteristics', () => {
     it('should not block for extended periods', async () => {
-      let executed = false;
-      scheduler.schedule(() => {
-        executed = true;
+      await new Promise<void>((resolve) => {
+        scheduler.schedule(() => {
+          resolve();
+        });
       });
-      
-      await sleep(10); // Use deterministic sleep
-      expect(executed).to.be.true;
+      // If we reach here, the callback executed without blocking indefinitely
     });
 
     it('should allow other operations to run between schedule calls', async () => {
       const results: string[] = [];
+      let scheduledCount = 0;
       
-      scheduler.schedule(() => results.push('scheduled1'));
-      Promise.resolve().then(() => results.push('microtask1'));
-      scheduler.schedule(() => results.push('scheduled2'));
-      Promise.resolve().then(() => results.push('microtask2'));
+      await new Promise<void>((resolve) => {
+        scheduler.schedule(() => {
+          results.push('scheduled1');
+          scheduledCount++;
+          if (scheduledCount === 2) resolve();
+        });
+        Promise.resolve().then(() => results.push('microtask1'));
+        scheduler.schedule(() => {
+          results.push('scheduled2');
+          scheduledCount++;
+          if (scheduledCount === 2) resolve();
+        });
+        Promise.resolve().then(() => results.push('microtask2'));
+      });
       
-      // Check results after all have had time to execute
-      // Increased delay for browser timing reliability
-      await sleep(100); // Use deterministic sleep with longer delay for browsers
+      // Verify all operations completed
       expect(results).to.have.lengthOf(4);
       expect(results).to.include.members(['scheduled1', 'microtask1', 'scheduled2', 'microtask2']);
     });
